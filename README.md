@@ -15,6 +15,8 @@
 | `README.md` | 本文件 |
 | `EVALUATION.md` | 评测标准与要求提炼：模型、精度门槛、SLO、并发阶梯、提交物 |
 | `eval/` | 精度自测：测试集构成说明 + 下载四项公开数据集的脚本（官方 190 题不公开，这里是自测代理） |
+| `site/` | 报告站：build.py 渲染 Markdown 成静态站，deploy.py 部署到 Cloudflare Pages |
+| `reports/` | 报告：每篇一个 Markdown，发布办法见 reports/README.md |
 
 > 校验状态（2026-11-20）：5 个文件都过了 `bash -n` 语法检查；
 > `modelscope download` 和 `hf download` 在本机实测过（各下一个 51 KB 的
@@ -150,3 +152,8 @@ bash smoke-test.sh
 2. 用 EvalScope 对本地服务跑四集精度，对照官方权重，确认损失 ≤2%。
 3. 用 AIPerf 按并发阶梯 8/16/32/64/80 压测，核 TTFT/TPOT SLO。
 4. 产出提交三件套：自测报告、服务地址或镜像 + 启动脚本、环境与优化说明表。
+
+## 8. 报告站（仅队内可见）
+
+报告站：https://hackathon-infra.pages.dev（Cloudflare Pages，Access 限队内邮箱）。
+写报告见 `reports/README.md`；发布跑 `python3 site/deploy.py`。
