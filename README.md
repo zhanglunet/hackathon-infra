@@ -13,6 +13,8 @@
 | `serve-qwen27b.sh` | 起 vLLM OpenAI 服务：272K 上下文、FP8、prefix caching、/metrics，端口 8000 |
 | `smoke-test.sh` | 冒烟测试：/health、/v1/models、流式出 token 测 TTFT/TPOT、/metrics |
 | `README.md` | 本文件 |
+| `EVALUATION.md` | 评测标准与要求提炼：模型、精度门槛、SLO、并发阶梯、提交物 |
+| `eval/` | 精度自测：测试集构成说明 + 下载四项公开数据集的脚本（官方 190 题不公开，这里是自测代理） |
 
 > 校验状态（2026-11-20）：5 个文件都过了 `bash -n` 语法检查；
 > `modelscope download` 和 `hf download` 在本机实测过（各下一个 51 KB 的
@@ -41,7 +43,7 @@
   练 BF16 的话要 200 GB。
 - 注意：第二模型如果选 GLM-5.3-Flash（328 GB），单卡跑不了，
   后面还得另租多卡节点；本包先只覆盖 Qwen3.8-27B 单卡排练。
-- 实例到手后，把本目录 5 个文件拷过去（`scp -r` 或 AutoDL 的 JupyterLab 上传）。
+- 实例到手后，把本目录整个拷过去（`scp -r` 或 AutoDL 的 JupyterLab 上传）。
 
 ## 1. 装环境
 
@@ -140,8 +142,11 @@ bash smoke-test.sh
    `--enable-expert-parallel`、PD 分离（prefill/decode 拆到不同卡上）。
    先保证“能跑 + 精度过关”，再抠吞吐。
 
-## 7. 下一步（等组织方发评测包后）
+## 7. 下一步：评测（标准与测试集已在仓库里）
 
-1. 用 EvalScope 跑 190 题精度集，对照官方权重，确认损失 ≤2%。
-2. 用 AIPerf 按并发阶梯 8/16/32/64/80 压测，核 TTFT/TPOT SLO。
-3. 产出提交三件套：自测报告、服务地址或镜像 + 启动脚本、环境与优化说明表。
+评测标准见 `EVALUATION.md`，测试集说明与下载见 `eval/`。
+
+1. 下数据：`python3 eval/fetch-benchmarks.py`，落到 `eval/data/`。
+2. 用 EvalScope 对本地服务跑四集精度，对照官方权重，确认损失 ≤2%。
+3. 用 AIPerf 按并发阶梯 8/16/32/64/80 压测，核 TTFT/TPOT SLO。
+4. 产出提交三件套：自测报告、服务地址或镜像 + 启动脚本、环境与优化说明表。
