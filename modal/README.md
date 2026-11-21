@@ -37,7 +37,7 @@ modal run modal/modal_vllm_qwen27b.py --url https://<部署地址>
 | 变量 | 默认 | 说明 |
 |---|---|---|
 | `MODAL_GPU` | `A100-80GB` | 显卡型号。FP8 冒烟切 `H100`；测 272K 切 `H200` |
-| `QUANT` | `fp8` | `fp8`（Qwen/Qwen3.8-27B-FP8，7 分片）或 `bf16`（Qwen/Qwen3.8-27B，18 分片） |
+| `QUANT` | `fp8` | `fp8`（Qwen/Qwen3.8-27B-FP8，66 个分片文件：layers-0~63 + mtp + outside）或 `bf16`（Qwen/Qwen3.8-27B，18 分片） |
 | `MAX_MODEL_LEN` | `262144` | 上下文上限。测 272K 时设 `272000`（自动加 YaRN 外推，见下） |
 | `MAX_NUM_SEQS` | `32` | 最大并发序列数 |
 | `GPU_MEM_UTIL` | `0.90` | 显存占用比 |
@@ -69,6 +69,11 @@ MODAL_GPU=H200 MAX_MODEL_LEN=272000 modal deploy modal/modal_vllm_qwen27b.py
 
 ## 注意事项
 
+- **环境变量只在本地 deploy 时生效**：Modal 会在容器里重导入代码文件，
+  那时 `MODAL_GPU` 等本地环境变量已不存在，模块级变量会回落到默认值
+  （曾导致 H100 部署在容器里被误判成 A100，fail-fast 报错循环重启）。
+  配置必须经 `@app.function(env=...)` 显式传进容器（见代码里的
+  `_CONTAINER_ENV`）；不要给 `web_server` 装饰的函数加参数，Modal 不允许。
 - **A100 跑不了 FP8 权重**：FP8 需要 Hopper（算力 9.0+）或 Blackwell
   的张量核，A100 是 Ampere（8.0）。代码里有和 `serve-qwen27b.sh`
   一样的算力检查，A100 + FP8 会直接报错并告诉你怎么改（切 H100/H200，

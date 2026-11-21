@@ -37,11 +37,26 @@ MAX_NUM_SEQS = int(os.environ.get("MAX_NUM_SEQS", "32"))
 GPU_MEM_UTIL = os.environ.get("GPU_MEM_UTIL", "0.90")
 
 MODELS = {
-    "fp8": ("Qwen/Qwen3.8-27B-FP8", "Qwen3.8-27B-FP8", 7),
-    "bf16": ("Qwen/Qwen3.8-27B", "Qwen3.8-27B", 18),
+    # (HF 仓库, 本地目录名, 预期分片数, 分片匹配模式)
+    # 注意 FP8 版的分片不叫 model-*.safetensors，而是按层拆的
+    # layers-0~63（64 个）+ mtp + outside = 66 个（2026-11-21 用 HF API 核实）。
+    "fp8": ("Qwen/Qwen3.8-27B-FP8", "Qwen3.8-27B-FP8", 66, "*.safetensors"),
+    "bf16": ("Qwen/Qwen3.8-27B", "Qwen3.8-27B", 18, "model-*.safetensors"),
 }
-MODEL_ID, LOCAL_NAME, EXPECTED_SHARDS = MODELS[QUANT]
+MODEL_ID, LOCAL_NAME, EXPECTED_SHARDS, SHARD_GLOB = MODELS[QUANT]
 MODEL_PATH = f"{MODELS_DIR}/{LOCAL_NAME}"
+
+# 容器里重导入本文件时，本地 shell 的环境变量已不存在；必须把配置经
+# @app.function(env=...) 显式传进容器，容器里的模块级变量才能读到
+# 同样的值。缺这一步时，H100 部署在容器里会回落成 A100 默认值，
+# fail-fast 报错导致循环重启（2026-11-21 实测）。
+_CONTAINER_ENV = {
+    "MODAL_GPU": GPU,
+    "QUANT": QUANT,
+    "MAX_MODEL_LEN": str(MAX_MODEL_LEN),
+    "MAX_NUM_SEQS": str(MAX_NUM_SEQS),
+    "GPU_MEM_UTIL": GPU_MEM_UTIL,
+}
 
 app = modal.App(APP_NAME)
 
@@ -65,10 +80,11 @@ def _check_fp8_gpu(gpu: str, quant: str) -> None:
         )
 
 
-@app.function(image=image, volumes={MODELS_DIR: volume}, timeout=3600)
+@app.function(image=image, env=_CONTAINER_ENV, volumes={MODELS_DIR: volume}, timeout=3600)
 def download_weights():
     """把权重下到 Modal Volume（约 31 GB FP8 / 约 55 GB BF16），只跑一次。
-    不挂 GPU，只花 CPU 时间。"""
+    不挂 GPU，只花 CPU 时间。配置经 env=_CONTAINER_ENV 传进容器，
+    见上面注释。"""
     from pathlib import Path
 
     from huggingface_hub import snapshot_download
@@ -80,14 +96,15 @@ def download_weights():
     target = Path(MODEL_PATH)
     for f in ("config.json", "model.safetensors.index.json", "tokenizer.json"):
         assert (target / f).exists(), f"缺少关键文件：{f}"
-    shards = len(list(target.glob("model-*.safetensors")))
-    print(f"分片数量：{shards}（预期 {EXPECTED_SHARDS}）")
+    shards = len(list(target.glob(SHARD_GLOB)))
+    print(f"分片数量：{shards}（预期 {EXPECTED_SHARDS}，按 {SHARD_GLOB} 计数）")
     assert shards == EXPECTED_SHARDS, "分片数量不对，下载可能不完整，请重跑。"
     print(f"[完成] 权重就绪：{MODEL_PATH}")
 
 
 @app.function(
     image=image,
+    env=_CONTAINER_ENV,
     gpu=GPU,
     volumes={MODELS_DIR: volume},
     timeout=60 * 60 * 4,
@@ -95,7 +112,9 @@ def download_weights():
 )
 @modal.web_server(port=8000, startup_timeout=600)
 def serve():
-    """起 vLLM OpenAI 兼容服务：/v1/chat/completions + /metrics，端口 8000。"""
+    """起 vLLM OpenAI 兼容服务：/v1/chat/completions + /metrics，端口 8000。
+    配置经 env=_CONTAINER_ENV 传进容器（见上面注释）；不要给 web_server
+    装饰的函数加参数，Modal 不允许。"""
     _check_fp8_gpu(GPU, QUANT)
     cmd = [
         "vllm", "serve", MODEL_PATH,
