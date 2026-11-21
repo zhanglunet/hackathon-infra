@@ -56,6 +56,11 @@ _CONTAINER_ENV = {
     "MAX_MODEL_LEN": str(MAX_MODEL_LEN),
     "MAX_NUM_SEQS": str(MAX_NUM_SEQS),
     "GPU_MEM_UTIL": GPU_MEM_UTIL,
+    # vLLM 0.34.0 会先校验 max_model_len ≤ config 的 max_position_embeddings，
+    # 再应用 --hf-overrides；超原生上限必须另设此变量才放行（2026-11-21
+    # 实测：不设它时 vLLM 直接报 ValueError，容器循环重启）。
+    # YaRN 外推本身仍由 --hf-overrides 的 rope_parameters 负责。
+    "VLLM_ALLOW_LONG_MAX_MODEL_LEN": "1",
 }
 
 app = modal.App(APP_NAME)

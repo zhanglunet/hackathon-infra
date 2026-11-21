@@ -81,7 +81,10 @@ MODAL_GPU=H200 MAX_MODEL_LEN=272000 modal deploy modal/modal_vllm_qwen27b.py
 - **272K 是 YaRN 外推**：模型原生上限 262144，比赛要 272000，只差
   3.8%。`MAX_MODEL_LEN=272000` 时代码自动加 YaRN（factor≈1.04），
   这是实验性路径：先跑 EvalScope 精度对照，确认损失 ≤2% 再用；
-  如启动报错或精度不达标，退回 262144。
+  如启动报错或精度不达标，退回 262144。注意：vLLM 0.34.0 会先校验
+  `max_model_len` 不超 config 的 `max_position_embeddings`，光加
+  `--hf-overrides` 不够，还必须设 `VLLM_ALLOW_LONG_MAX_MODEL_LEN=1`
+  才放行（2026-11-21 实测：不设它直接报 ValueError，容器循环重启）。
 - **显存账本**（见 serve-qwen27b.sh）：FP8 权重约 30.9 GB + FP8 KV
   约 8.6 GB ≈ 40 GB，80 GB 卡够用；H200（141 GB）测 272K 更宽裕。
 - **首次部署要留时间**：镜像要装 vLLM + torch（约 8 GB），权重

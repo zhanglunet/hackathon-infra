@@ -18,6 +18,7 @@
 | `site/` | 报告站：build.py 渲染 Markdown 成静态站，deploy.py 部署到 Cloudflare Pages |
 | `reports/` | 报告：每篇一个 Markdown，发布办法见 reports/README.md |
 | `modal/` | Modal 部署：vLLM 服务代码 + 说明（A100 冒烟 / H200 测 272K） |
+| `probe/` | 长上下文探测脚本：272K 提示构造 + 探测运行（探测文本本身未进仓库，可按脚本重建） |
 | `devlog/` | 开发日志：每次部署验证一篇，索引见 devlog/README.md |
 
 > 校验状态（2026-11-20）：5 个文件都过了 `bash -n` 语法检查；
