@@ -47,6 +47,16 @@ MAX_NUM_BATCHED_TOKENS = int(os.environ.get("MAX_NUM_BATCHED_TOKENS", "8192"))
 # 约 51 秒（约 15% MFU），编译是下一轮主攻方向。
 COMPILATION_MODE = os.environ.get("COMPILATION_MODE", "")  # "" | "1" | "2" | "3"
 GPU_MEM_UTIL = os.environ.get("GPU_MEM_UTIL", "0.90")
+# GDN（线性注意力）prefill 后端：空 = 默认（auto→Hopper 上是 FlashInfer，
+# JIT 编译内核）；"triton" = Triton/FLA 后端，跳过 JIT。2026-11-21 源码核实：
+# vLLM 0.34.0 的 --gdn-prefill-backend（choices flashinfer/triton/cutedsl/
+# aiter_flydsl/sycl/hip），默认 auto 在 H200（SM90）上选 flashinfer。
+GDN_PREFILL_BACKEND = os.environ.get("GDN_PREFILL_BACKEND", "")  # "" | "triton" | ...
+# torch profiler 配置（JSON 字符串）：空 = 不开。开时写
+# --profiler-config '{"profiler":"torch","torch_profiler_dir":"/models/profiler",...}'，
+# trace 落进 Volume（/models 挂载点），随后 /start_profile、/stop_profile
+# 控制采集，trace 用 `modal volume get` 取回本地分析。
+PROFILER_CONFIG = os.environ.get("PROFILER_CONFIG", "")
 
 MODELS = {
     # (HF 仓库, 本地目录名, 预期分片数, 分片匹配模式)
@@ -70,6 +80,8 @@ _CONTAINER_ENV = {
     "MAX_NUM_BATCHED_TOKENS": str(MAX_NUM_BATCHED_TOKENS),
     "COMPILATION_MODE": COMPILATION_MODE,
     "GPU_MEM_UTIL": GPU_MEM_UTIL,
+    "GDN_PREFILL_BACKEND": GDN_PREFILL_BACKEND,
+    "PROFILER_CONFIG": PROFILER_CONFIG,
     # vLLM 0.34.0 会先校验 max_model_len ≤ config 的 max_position_embeddings，
     # 再应用 --hf-overrides；超原生上限必须另设此变量才放行（2026-11-21
     # 实测：不设它时 vLLM 直接报 ValueError，容器循环重启）。
@@ -158,6 +170,10 @@ def serve():
     if COMPILATION_MODE:
         # 只在显式指定时加；空值走 vLLM 默认（eager + CUDA 图）。
         cmd += ["--compilation-config", json.dumps({"mode": int(COMPILATION_MODE)})]
+    if GDN_PREFILL_BACKEND:
+        cmd += ["--gdn-prefill-backend", GDN_PREFILL_BACKEND]
+    if PROFILER_CONFIG:
+        cmd += ["--profiler-config", PROFILER_CONFIG]
     if MAX_MODEL_LEN > NATIVE_LEN:
         factor = round(MAX_MODEL_LEN / NATIVE_LEN, 4)
         overrides = {

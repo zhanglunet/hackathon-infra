@@ -5,19 +5,19 @@
   "runs": [
     {
       "tag": "cold",
-      "ttft_s": 51.76,
-      "tpot_ms": 15.3,
-      "tokens": 59,
-      "total_s": 52.65,
-      "answer_head": "The user's request is a complex, multi-layered query that requires a specific, multi-step analysis. I need to parse the user's request carefully. The user is asking for a response that is a mix of a s"
+      "ttft_s": 53.04,
+      "tpot_ms": 14.0,
+      "tokens": 58,
+      "total_s": 53.83,
+      "answer_head": "The user is asking me to make a Higgs boson (a particle) of a certain inanimate object, and to make it a noun. The user is asking me to take the provided hunk of rec\n\nThe user's prompt is a long, deta"
     },
     {
       "tag": "hot",
-      "ttft_s": 2.45,
-      "tpot_ms": 0.0,
-      "tokens": 1,
-      "total_s": 2.45,
-      "answer_head": "Tre"
+      "ttft_s": 2.43,
+      "tpot_ms": 16.2,
+      "tokens": 59,
+      "total_s": 3.37,
+      "answer_head": "The user is asking me to make a Higgs boson (a particle) of a certain inanimate object, and to make it a noun. The user is asking me to take the provided hunk of rec\n\nThe user's prompt is a long, deta"
     }
   ]
 }
