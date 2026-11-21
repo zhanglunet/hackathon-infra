@@ -40,6 +40,8 @@ modal run modal/modal_vllm_qwen27b.py --url https://<部署地址>
 | `QUANT` | `fp8` | `fp8`（Qwen/Qwen3.8-27B-FP8，66 个分片文件：layers-0~63 + mtp + outside）或 `bf16`（Qwen/Qwen3.8-27B，18 分片） |
 | `MAX_MODEL_LEN` | `262144` | 上下文上限。测 272K 时设 `272000`（自动加 YaRN 外推，见下） |
 | `MAX_NUM_SEQS` | `32` | 最大并发序列数 |
+| `MAX_NUM_BATCHED_TOKENS` | `8192` | chunked prefill 步长（单步最多 token 数）。272K 冷 TTFT 调优时调大它（如 `262144`，271K 提示只切 2 片） |
+| `COMPILATION_MODE` | （空） | 编译模式：空走默认（eager + CUDA 图）；`3` = VLLM_COMPILE（vLLM 定制 Inductor 后端）；`1` = 标准 torch.compile；`2` = 单次 Dynamo 追踪。见 vLLM 官方文档 `--compilation-config` 一节 |
 | `GPU_MEM_UTIL` | `0.90` | 显存占用比 |
 
 常用组合：

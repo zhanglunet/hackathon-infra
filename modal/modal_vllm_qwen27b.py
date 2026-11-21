@@ -34,6 +34,18 @@ GPU = os.environ.get("MODAL_GPU", "A100-80GB")
 QUANT = os.environ.get("QUANT", "fp8")  # fp8 | bf16
 MAX_MODEL_LEN = int(os.environ.get("MAX_MODEL_LEN", str(NATIVE_LEN)))
 MAX_NUM_SEQS = int(os.environ.get("MAX_NUM_SEQS", "32"))
+# chunked prefill 步长：vLLM 0.34.0 默认 8192。271K 提示会被切成约
+# 34 片，片间有调度开销；调大它让单步吃更多 token（262144 时
+# 271,500 token 的提示只切 2 片，基本不分片）。调大后单步激活显存
+# 涨，vLLM 会自动少分 KV 块——单请求只占 KV 约 9%，够用。
+MAX_NUM_BATCHED_TOKENS = int(os.environ.get("MAX_NUM_BATCHED_TOKENS", "8192"))
+# 编译模式：空 = 默认（vLLM 0.34.0 实测跑 eager，mode=0，CUDA 图照常开）；
+# 3 = VLLM_COMPILE（vLLM 定制的 Inductor 后端，分段编译 + 形状特化），
+# 1 = 标准 torch.compile，2 = 单次 Dynamo 追踪。见 vLLM 官方文档
+# Engine Arguments 的 --compilation-config 一节（-cc.mode=3 等价于
+# -cc='{"mode":3}'）。2026-11-21 实测：默认 eager 下 272K 冷 TTFT
+# 约 51 秒（约 15% MFU），编译是下一轮主攻方向。
+COMPILATION_MODE = os.environ.get("COMPILATION_MODE", "")  # "" | "1" | "2" | "3"
 GPU_MEM_UTIL = os.environ.get("GPU_MEM_UTIL", "0.90")
 
 MODELS = {
@@ -55,6 +67,8 @@ _CONTAINER_ENV = {
     "QUANT": QUANT,
     "MAX_MODEL_LEN": str(MAX_MODEL_LEN),
     "MAX_NUM_SEQS": str(MAX_NUM_SEQS),
+    "MAX_NUM_BATCHED_TOKENS": str(MAX_NUM_BATCHED_TOKENS),
+    "COMPILATION_MODE": COMPILATION_MODE,
     "GPU_MEM_UTIL": GPU_MEM_UTIL,
     # vLLM 0.34.0 会先校验 max_model_len ≤ config 的 max_position_embeddings，
     # 再应用 --hf-overrides；超原生上限必须另设此变量才放行（2026-11-21
@@ -114,6 +128,10 @@ def download_weights():
     volumes={MODELS_DIR: volume},
     timeout=60 * 60 * 4,
     scaledown_window=600,
+    # 只留 1 个容器：Modal 默认会按需扩容，多个容器时请求会被负载均衡
+    # 到不同容器，前缀缓存测不准（2026-11-21 实测：热请求被分到空缓存
+    # 容器，TTFT 50.88 秒假阴性），还会顶满工作区 10 GPU 并发上限。
+    max_containers=1,
 )
 @modal.web_server(port=8000, startup_timeout=600)
 def serve():
@@ -131,11 +149,15 @@ def serve():
         "--kv-cache-dtype", "fp8",
         "--gpu-memory-utilization", GPU_MEM_UTIL,
         "--max-num-seqs", str(MAX_NUM_SEQS),
+        "--max-num-batched-tokens", str(MAX_NUM_BATCHED_TOKENS),
         "--enable-prefix-caching",
         "--enable-per-request-metrics",
     ]
     if QUANT == "fp8":
         cmd += ["--quantization", "fp8"]
+    if COMPILATION_MODE:
+        # 只在显式指定时加；空值走 vLLM 默认（eager + CUDA 图）。
+        cmd += ["--compilation-config", json.dumps({"mode": int(COMPILATION_MODE)})]
     if MAX_MODEL_LEN > NATIVE_LEN:
         factor = round(MAX_MODEL_LEN / NATIVE_LEN, 4)
         overrides = {
