@@ -17,6 +17,8 @@
 | `eval/` | 精度自测：测试集构成说明 + 下载四项公开数据集的脚本（官方 190 题不公开，这里是自测代理） |
 | `site/` | 报告站：build.py 渲染 Markdown 成静态站，deploy.py 部署到 Cloudflare Pages |
 | `reports/` | 报告：每篇一个 Markdown，发布办法见 reports/README.md |
+| `modal/` | Modal 部署：vLLM 服务代码 + 说明（A100 冒烟 / H200 测 272K） |
+| `devlog/` | 开发日志：每次部署验证一篇，索引见 devlog/README.md |
 
 > 校验状态（2026-11-20）：5 个文件都过了 `bash -n` 语法检查；
 > `modelscope download` 和 `hf download` 在本机实测过（各下一个 51 KB 的
