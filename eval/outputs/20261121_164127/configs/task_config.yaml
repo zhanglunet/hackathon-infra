@@ -1,0 +1,150 @@
+agent_config: null
+analysis_report: false
+api_key: '**********'
+api_url: https://zhanglunet--qwen27b-vllm-serve.us-east.modal.run/v1
+chat_template: null
+collect_perf: true
+dataset_args:
+  general_mcq:
+    dataset_id: /home/hatch/workspace/hackathon-infra/eval/data/gpqa_diamond.jsonl
+dataset_dir: /home/hatch/.cache/modelscope/hub/datasets
+dataset_hub: huggingface
+datasets:
+- aime25
+- general_mcq
+debug: false
+dry_run: false
+enable_progress_tracker: false
+eval_backend: Native
+eval_batch_size: 16
+eval_config: null
+eval_type: openai_api
+evalscope_version: 1.15.0
+evaluation_identity:
+  benchmarks:
+    aime25:
+      cache_source: null
+      evaluation_version: v1.2
+      fingerprint: sha256:09f9b73f71a752a168d9f78d1c704e5693599dae1ad222a30ad4777ca010f1a8
+      review_pending: false
+    general_mcq:
+      cache_source: null
+      evaluation_version: v1.1
+      fingerprint: sha256:06bce4f2c5d167a0d1cf9c650e88be6bc466ff6ac0458ff2827ef9e074aad126
+      review_pending: false
+  schema_version: 1
+generation_config:
+  batch_size: 16
+  max_tokens: 4096
+  temperature: 0.0
+ignore_errors: false
+judge:
+  aggregation: mean
+  contract:
+    prompt_template: null
+    score_mapping: null
+    score_type: pattern
+    system_prompt: null
+  min_valid_judges: 1
+  models: []
+  position_swap: auto
+  repeats: 1
+  strategy: auto
+limit: 50
+model: qwen3.8-27b
+model_args: {}
+model_id: qwen3.8-27b
+model_task: text_generation
+no_timestamp: false
+repeats: 1
+rerun_review: false
+resolved_benchmarks:
+  aime25:
+    aggregation: mean
+    dataset_hub: huggingface
+    dataset_id: math-ai/aime25
+    dataset_revision: null
+    default_subset: default
+    dependencies: {}
+    eval_split: test
+    extra_params: {}
+    few_shot_num: 0
+    few_shot_prompt_template: null
+    few_shot_random: false
+    filters: null
+    max_image_bytes: null
+    metric_list:
+    - accuracy:
+        numeric: true
+    name: aime25
+    primary_metric: null
+    prompt_template: '
+
+      Solve the following math problem step by step. Put your answer inside \boxed{{}}.
+
+
+      {question}
+
+
+      Remember to put your answer inside \boxed{{}}.'
+    query_template: null
+    sandbox_config: {}
+    shuffle: false
+    shuffle_choices: false
+    subset_list:
+    - default
+    system_prompt: null
+    train_split: null
+  general_mcq:
+    aggregation: mean
+    dataset_hub: huggingface
+    dataset_id: /home/hatch/workspace/hackathon-infra/eval/data/gpqa_diamond.jsonl
+    dataset_revision: null
+    default_subset: default
+    dependencies: {}
+    eval_split: val
+    extra_params:
+      multiple_correct: false
+      use_cot: false
+    few_shot_num: 0
+    few_shot_prompt_template: null
+    few_shot_random: false
+    filters: null
+    max_image_bytes: null
+    metric_list:
+    - accuracy
+    name: general_mcq
+    primary_metric: null
+    prompt_template: '回答下面的单项选择题，请选出其中的正确答案。你的回答的全部内容应该是这样的格式："答案：[LETTER]"（不带引号），其中
+      [LETTER] 是 {letters} 中的一个。
+
+
+      问题：{question}
+
+      选项：
+
+      {choices}
+
+      '
+    query_template: null
+    sandbox_config: {}
+    shuffle: false
+    shuffle_choices: false
+    subset_list:
+    - default
+    system_prompt: null
+    train_split: dev
+sandbox:
+  default_config: {}
+  enabled: false
+  engine: docker
+  manager_config: {}
+  pool_size: null
+sandbox_manager_config: {}
+sandbox_type: docker
+seed: 42
+stream: null
+timeout: null
+use_cache: null
+use_sandbox: false
+work_dir: ./eval/outputs/20261121_164127

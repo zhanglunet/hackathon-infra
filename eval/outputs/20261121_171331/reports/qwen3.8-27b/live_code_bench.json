@@ -1,0 +1,294 @@
+{
+    "schema_version": 2,
+    "name": "qwen3.8-27b@live_code_bench",
+    "dataset_name": "live_code_bench",
+    "dataset_pretty_name": "Live-Code-Bench",
+    "dataset_description": "\n## Overview\n\nLiveCodeBench is a contamination-free benchmark for evaluating code generation models on real-world competitive programming problems. It continuously collects new problems from coding platforms to ensure models haven't seen the test data during training.\n\n## Task Description\n\n- **Task Type**: Competitive Programming / Code Generation\n- **Input**: Programming problem description with input/output format\n- **Output**: Complete solution code\n- **Source**: Problems from LeetCode, Codeforces, and AtCoder\n\n## Key Features\n\n- Continuously updated with new problems post model training cutoff\n- Problems from major competitive programming platforms\n- Multiple test cases per problem for thorough evaluation\n- Date-based filtering to control for data contamination\n- Supports both local and sandbox code execution\n\n## Evaluation Notes\n\n- Default configuration uses **0-shot** evaluation\n- Prompts follow the official LiveCodeBench runner: a generic \"expert Python programmer\" system message plus the `### Question` / `### Format` user message\n- **Security Warning**: By default, code is executed in the local environment. We recommend using sandbox execution. See the [sandbox documentation](https://evalscope.readthedocs.io/en/latest/user_guides/sandbox.html) for details.\n- Use `start_date` and `end_date` parameters to filter problems by date\n- Default timeout is 6 seconds per test case\n- Supports `pass@k` metric calculation\n",
+    "model_name": "qwen3.8-27b",
+    "metrics": [
+        {
+            "identity": {
+                "name": "accuracy",
+                "aggregation": "mean",
+                "dimensions": {}
+            },
+            "legacy_name": null,
+            "num": 40,
+            "num_correct": 17,
+            "score": 0.425,
+            "macro_score": 0.425,
+            "categories": [
+                {
+                    "name": [
+                        "default"
+                    ],
+                    "num": 40,
+                    "num_correct": 17,
+                    "score": 0.425,
+                    "macro_score": 0.425,
+                    "subsets": [
+                        {
+                            "name": "default",
+                            "score": 0.425,
+                            "num": 40,
+                            "num_correct": 17,
+                            "metadata": null,
+                            "is_aggregate": false
+                        }
+                    ]
+                }
+            ],
+            "semantics": {
+                "semantic_id": "quality.accuracy.ratio",
+                "metric_name": "Accuracy",
+                "display_name": null,
+                "kind": "quality",
+                "direction": "higher_is_better",
+                "raw_unit": null,
+                "value_range": {
+                    "min": 0.0,
+                    "max": 1.0
+                },
+                "display_kind": "percent",
+                "display_multiplier": 100.0,
+                "display_unit": "%",
+                "display_precision": 1
+            }
+        },
+        {
+            "identity": {
+                "name": "accuracy",
+                "aggregation": "pass_at_k",
+                "dimensions": {
+                    "k": 1
+                }
+            },
+            "legacy_name": null,
+            "num": 40,
+            "num_correct": null,
+            "score": 0.425,
+            "macro_score": 0.425,
+            "categories": [
+                {
+                    "name": [
+                        "default"
+                    ],
+                    "num": 40,
+                    "num_correct": null,
+                    "score": 0.425,
+                    "macro_score": 0.425,
+                    "subsets": [
+                        {
+                            "name": "default",
+                            "score": 0.425,
+                            "num": 40,
+                            "num_correct": null,
+                            "metadata": {
+                                "eligible": 40,
+                                "total": 40,
+                                "coverage": 1.0,
+                                "excluded": 0
+                            },
+                            "is_aggregate": false
+                        }
+                    ]
+                }
+            ],
+            "semantics": {
+                "semantic_id": "quality.pass_at_k.ratio",
+                "metric_name": "Pass@k",
+                "display_name": null,
+                "kind": "quality",
+                "direction": "higher_is_better",
+                "raw_unit": null,
+                "value_range": {
+                    "min": 0.0,
+                    "max": 1.0
+                },
+                "display_kind": "percent",
+                "display_multiplier": 100.0,
+                "display_unit": "%",
+                "display_precision": 1
+            }
+        }
+    ],
+    "analysis": "N/A",
+    "perf_metrics": {
+        "summary": {
+            "n_samples": 40,
+            "latency": {
+                "mean": 49.992487,
+                "std": 30.522338,
+                "min": 5.712161,
+                "25%": 11.458107,
+                "50%": 68.202096,
+                "75%": 74.776498,
+                "90%": 78.452757,
+                "99%": 78.489955,
+                "max": 78.503139
+            },
+            "throughput": {
+                "avg_output_tps": 54.04,
+                "avg_req_ps": 0.02
+            },
+            "usage": {
+                "input_tokens": {
+                    "mean": 637.525,
+                    "std": 223.136153,
+                    "min": 338.0,
+                    "25%": 476.5,
+                    "50%": 617.5,
+                    "75%": 728.25,
+                    "90%": 883.2,
+                    "99%": 1238.16,
+                    "max": 1260.0
+                },
+                "output_tokens": {
+                    "mean": 2701.35,
+                    "std": 1756.433691,
+                    "min": 79.0,
+                    "25%": 486.25,
+                    "50%": 4096.0,
+                    "75%": 4096.0,
+                    "90%": 4096.0,
+                    "99%": 4096.0,
+                    "max": 4096.0
+                },
+                "total_tokens": {
+                    "mean": 3338.875,
+                    "std": 1892.318456,
+                    "min": 417.0,
+                    "25%": 1123.0,
+                    "50%": 4592.0,
+                    "75%": 4799.5,
+                    "90%": 4979.2,
+                    "99%": 5334.16,
+                    "max": 5356.0
+                },
+                "total_input_tokens": 25501,
+                "total_output_tokens": 108054,
+                "total_tokens_count": 133555
+            }
+        },
+        "coverage": {
+            "requests_with_metrics": 40,
+            "total_requests": 40
+        },
+        "metric_semantics": {
+            "n_samples": {
+                "semantic_id": "diagnostic.count.items",
+                "metric_name": "Samples",
+                "display_name": null,
+                "kind": "diagnostic",
+                "direction": "none",
+                "raw_unit": null,
+                "value_range": null,
+                "display_kind": "number",
+                "display_multiplier": null,
+                "display_unit": null,
+                "display_precision": 0
+            },
+            "latency": {
+                "semantic_id": "perf.latency.seconds",
+                "metric_name": "Latency",
+                "display_name": null,
+                "kind": "quality",
+                "direction": "lower_is_better",
+                "raw_unit": "s",
+                "value_range": null,
+                "display_kind": "number",
+                "display_multiplier": null,
+                "display_unit": "s",
+                "display_precision": 3
+            },
+            "throughput.avg_output_tps": {
+                "semantic_id": "perf.throughput.tokens_per_second",
+                "metric_name": "Output Throughput",
+                "display_name": null,
+                "kind": "quality",
+                "direction": "higher_is_better",
+                "raw_unit": "tok/s",
+                "value_range": null,
+                "display_kind": "number",
+                "display_multiplier": null,
+                "display_unit": "tok/s",
+                "display_precision": 2
+            },
+            "throughput.avg_req_ps": {
+                "semantic_id": "perf.throughput.requests_per_second",
+                "metric_name": "Request Throughput",
+                "display_name": null,
+                "kind": "quality",
+                "direction": "higher_is_better",
+                "raw_unit": "req/s",
+                "value_range": null,
+                "display_kind": "number",
+                "display_multiplier": null,
+                "display_unit": "req/s",
+                "display_precision": 2
+            },
+            "usage.input_tokens": {
+                "semantic_id": "diagnostic.count.items",
+                "metric_name": "Input Tokens",
+                "display_name": null,
+                "kind": "diagnostic",
+                "direction": "none",
+                "raw_unit": null,
+                "value_range": null,
+                "display_kind": "number",
+                "display_multiplier": null,
+                "display_unit": null,
+                "display_precision": 0
+            },
+            "usage.output_tokens": {
+                "semantic_id": "diagnostic.count.items",
+                "metric_name": "Output Tokens",
+                "display_name": null,
+                "kind": "diagnostic",
+                "direction": "none",
+                "raw_unit": null,
+                "value_range": null,
+                "display_kind": "number",
+                "display_multiplier": null,
+                "display_unit": null,
+                "display_precision": 0
+            },
+            "usage.total_tokens": {
+                "semantic_id": "diagnostic.count.items",
+                "metric_name": "Total Tokens",
+                "display_name": null,
+                "kind": "diagnostic",
+                "direction": "none",
+                "raw_unit": null,
+                "value_range": null,
+                "display_kind": "number",
+                "display_multiplier": null,
+                "display_unit": null,
+                "display_precision": 0
+            }
+        }
+    },
+    "primary_metric_identity": {
+        "name": "accuracy",
+        "aggregation": "pass_at_k",
+        "dimensions": {
+            "k": 1
+        }
+    },
+    "primary_metric_unavailable_reason": null,
+    "judge_summary": null,
+    "execution_summary": {
+        "requested": 40,
+        "succeeded": 40,
+        "errored": 0,
+        "incomplete": false,
+        "subsets": {
+            "default": {
+                "requested": 40,
+                "succeeded": 40,
+                "errored": 0
+            }
+        }
+    },
+    "num": 40
+}

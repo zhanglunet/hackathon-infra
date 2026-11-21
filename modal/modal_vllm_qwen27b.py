@@ -144,7 +144,12 @@ def download_weights():
     # 到不同容器，前缀缓存测不准（2026-11-21 实测：热请求被分到空缓存
     # 容器，TTFT 50.88 秒假阴性），还会顶满工作区 10 GPU 并发上限。
     max_containers=1,
+    # 关键：Modal 默认每个容器一次只处理 1 个输入（实测 vLLM 引擎恒为
+    # Running: 1 reqs，并发 curl 全部排队超时），EvalScope 批量评测时
+    # 请求被串行化。用 @modal.concurrent 放开并发（allow_concurrent_inputs
+    # 参数在 modal 1.6 已废弃、会直接报 DeprecationError）。
 )
+@modal.concurrent(max_inputs=16)
 @modal.web_server(port=8000, startup_timeout=600)
 def serve():
     """起 vLLM OpenAI 兼容服务：/v1/chat/completions + /metrics，端口 8000。
