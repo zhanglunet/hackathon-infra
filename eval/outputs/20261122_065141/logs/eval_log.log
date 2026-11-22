@@ -1,0 +1,126 @@
+2026-11-22 06:51:41 - evalscope - INFO: Running with native backend
+2026-11-22 06:51:42 - evalscope - INFO: Dump task config to ./eval/outputs/20261122_065141/configs/task_config.yaml
+2026-11-22 06:51:42 - evalscope - INFO: {
+    "model_id": "qwen3.8-27b",
+    "model_args": {},
+    "model_task": "text_generation",
+    "chat_template": null,
+    "datasets": [
+        "live_code_bench"
+    ],
+    "dataset_args": {
+        "live_code_bench": {
+            "dataset_id": "/home/hatch/workspace/hackathon-infra/eval/data/lcb_v6_flat",
+            "subset_list": [
+                "default"
+            ]
+        }
+    },
+    "dataset_dir": "/home/hatch/.cache/modelscope/hub/datasets",
+    "dataset_hub": "modelscope",
+    "repeats": 1,
+    "eval_type": "openai_api",
+    "eval_backend": "Native",
+    "eval_config": null,
+    "limit": 40,
+    "eval_batch_size": 16,
+    "use_cache": null,
+    "rerun_review": false,
+    "work_dir": "./eval/outputs/20261122_065141",
+    "no_timestamp": false,
+    "enable_progress_tracker": false,
+    "ignore_errors": false,
+    "debug": false,
+    "dry_run": false,
+    "seed": 42,
+    "api_url": "https://zhanglunet--qwen27b-vllm-serve.us-east.modal.run/v1",
+    "api_key": "**********",
+    "timeout": null,
+    "stream": null,
+    "judge": {
+        "strategy": "auto",
+        "models": [],
+        "contract": {
+            "system_prompt": null,
+            "prompt_template": null,
+            "score_mapping": null,
+            "score_type": "pattern"
+        },
+        "repeats": 1,
+        "position_swap": "auto",
+        "aggregation": "mean",
+        "min_valid_judges": 1
+    },
+    "analysis_report": false,
+    "collect_perf": true,
+    "use_sandbox": false,
+    "sandbox_type": "docker",
+    "sandbox_manager_config": {},
+    "evalscope_version": "1.15.0",
+    "model": "qwen3.8-27b",
+    "generation_config": {
+        "batch_size": 16,
+        "max_tokens": 4096,
+        "temperature": 0.0
+    },
+    "sandbox": {
+        "enabled": false,
+        "engine": "docker",
+        "default_config": {},
+        "manager_config": {},
+        "pool_size": null
+    },
+    "agent_config": null
+}
+2026-11-22 06:51:42 - evalscope - INFO: Start loading benchmark dataset: live_code_bench
+2026-11-22 06:51:43 - evalscope - WARNING: live_code_bench: 40 samples to evaluate (1 subset, --limit=40 per subset). Remove `--limit` for a formal evaluation.
+2026-11-22 06:51:43 - evalscope - INFO: Subsets of live_code_bench: ['default']
+2026-11-22 06:51:43 - evalscope - INFO: Loading model for prediction...
+2026-11-22 06:51:43 - evalscope - INFO: Creating model qwen3.8-27b with eval_type=openai_api base_url=https://zhanglunet--qwen27b-vllm-serve.us-east.modal.run/v1, config={'retries': 5, 'retry_interval': 10, 'batch_size': 16, 'max_tokens': 4096, 'temperature': 0.0, 'anthropic_cache_strategy': 'evaluation'}, model_args={}
+2026-11-22 06:51:44 - evalscope - INFO: Model loaded successfully.
+2026-11-22 06:52:43 - evalscope - INFO: Evaluating[live_code_bench]  15%| 6/40 [Elapsed: 01:00 < Remaining: 02:00,  3.55s/it]
+2026-11-22 06:53:43 - evalscope - INFO: Evaluating[live_code_bench]  22%| 9/40 [Elapsed: 02:00 < Remaining: 05:30, 10.66s/it]
+2026-11-22 06:54:44 - evalscope - INFO: Evaluating[live_code_bench]  72%| 29/40 [Elapsed: 03:00 < Remaining: 00:28,  2.58s/it]
+2026-11-22 06:55:44 - evalscope - INFO: Evaluating[live_code_bench]  82%| 33/40 [Elapsed: 04:00 < Remaining: 01:20, 11.43s/it]
+2026-11-22 06:56:01 - evalscope - INFO: Evaluating[live_code_bench] 100%| 40/40 [Elapsed: 04:18 < Remaining: 00:00,  4.61s/it]
+2026-11-22 06:56:01 - evalscope - INFO: live_code_bench: predictions complete, aggregating scores...
+2026-11-22 06:56:01 - evalscope - INFO: Aggregating scores for subset: default
+2026-11-22 06:56:01 - evalscope - INFO: Generating report...
+2026-11-22 06:56:01 - evalscope - INFO: 
+live_code_bench report table:
+┌─────────────┬─────────────────┬────────────────┬──────────┬───────┬───────────┬─────────┐
+│ Model       │ Dataset         │ Metric         │ Subset   │   Num │ Correct   │ Score   │
+├─────────────┼─────────────────┼────────────────┼──────────┼───────┼───────────┼─────────┤
+│ qwen3.8-27b │ Live-Code-Bench │ Accuracy ↑     │ default  │    40 │ 17        │ 42.5%   │
+├─────────────┼─────────────────┼────────────────┼──────────┼───────┼───────────┼─────────┤
+│ qwen3.8-27b │ Live-Code-Bench │ Pass@k ↑ · k 1 │ default  │    40 │ -         │ 42.5%   │
+└─────────────┴─────────────────┴────────────────┴──────────┴───────┴───────────┴─────────┘ 
+
+2026-11-22 06:56:01 - evalscope - INFO: Skipping report analysis (`analysis_report=False`).
+2026-11-22 06:56:01 - evalscope - INFO: Dump report to: ./eval/outputs/20261122_065141/reports/qwen3.8-27b/live_code_bench.json 
+
+2026-11-22 06:56:01 - evalscope - INFO: 
+live_code_bench perf table:
+Model        Dataset            Num  Avg Lat    Avg TTFT    Avg TPOT    Avg Thpt      Avg In    Avg Out
+-----------  ---------------  -----  ---------  ----------  ----------  ----------  --------  ---------
+qwen3.8-27b  Live-Code-Bench     40  63.3 s     —           —           42.1 tok/s       638       2665
+
+2026-11-22 06:56:01 - evalscope - INFO: Benchmark live_code_bench evaluation finished.
+2026-11-22 06:56:01 - evalscope - INFO: Running[eval] 100%| 1/1 [Elapsed: 04:19 < Remaining: 00:00, 259.68s/benchmark]
+2026-11-22 06:56:02 - evalscope - INFO: Overall report table: 
+┌─────────────┬─────────────────┬────────────────┬──────────┬───────┬───────────┬─────────┐
+│ Model       │ Dataset         │ Metric         │ Subset   │   Num │ Correct   │ Score   │
+├─────────────┼─────────────────┼────────────────┼──────────┼───────┼───────────┼─────────┤
+│ qwen3.8-27b │ Live-Code-Bench │ Accuracy ↑     │ default  │    40 │ 17        │ 42.5%   │
+├─────────────┼─────────────────┼────────────────┼──────────┼───────┼───────────┼─────────┤
+│ qwen3.8-27b │ Live-Code-Bench │ Pass@k ↑ · k 1 │ default  │    40 │ -         │ 42.5%   │
+└─────────────┴─────────────────┴────────────────┴──────────┴───────┴───────────┴─────────┘ 
+
+2026-11-22 06:56:02 - evalscope - INFO: Overall perf table: 
+Model        Dataset            Num  Avg Lat    Avg TTFT    Avg TPOT    Avg Thpt      Avg In    Avg Out
+-----------  ---------------  -----  ---------  ----------  ----------  ----------  --------  ---------
+qwen3.8-27b  Live-Code-Bench     40  63.3 s     —           —           42.1 tok/s       638       2665 
+
+2026-11-22 06:56:03 - evalscope - INFO: HTML report generated: /home/hatch/workspace/hackathon-infra/eval/outputs/20261122_065141/reports/report.html
+2026-11-22 06:56:03 - evalscope - INFO: Finished evaluation for qwen3.8-27b on ['live_code_bench']
+2026-11-22 06:56:03 - evalscope - INFO: Output directory: ./eval/outputs/20261122_065141

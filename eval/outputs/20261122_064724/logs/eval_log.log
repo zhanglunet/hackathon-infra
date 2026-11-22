@@ -1,0 +1,119 @@
+2026-11-22 06:47:24 - evalscope - INFO: Running with native backend
+2026-11-22 06:47:24 - evalscope - INFO: Dump task config to ./eval/outputs/20261122_064724/configs/task_config.yaml
+2026-11-22 06:47:24 - evalscope - INFO: {
+    "model_id": "qwen3.8-27b",
+    "model_args": {},
+    "model_task": "text_generation",
+    "chat_template": null,
+    "datasets": [
+        "general_mcq"
+    ],
+    "dataset_args": {
+        "general_mcq": {
+            "dataset_id": "/home/hatch/workspace/hackathon-infra/eval/data/gpqa_diamond.jsonl"
+        }
+    },
+    "dataset_dir": "/home/hatch/.cache/modelscope/hub/datasets",
+    "dataset_hub": "modelscope",
+    "repeats": 1,
+    "eval_type": "openai_api",
+    "eval_backend": "Native",
+    "eval_config": null,
+    "limit": 50,
+    "eval_batch_size": 16,
+    "use_cache": null,
+    "rerun_review": false,
+    "work_dir": "./eval/outputs/20261122_064724",
+    "no_timestamp": false,
+    "enable_progress_tracker": false,
+    "ignore_errors": false,
+    "debug": false,
+    "dry_run": false,
+    "seed": 42,
+    "api_url": "https://zhanglunet--qwen27b-vllm-serve.us-east.modal.run/v1",
+    "api_key": "**********",
+    "timeout": null,
+    "stream": null,
+    "judge": {
+        "strategy": "auto",
+        "models": [],
+        "contract": {
+            "system_prompt": null,
+            "prompt_template": null,
+            "score_mapping": null,
+            "score_type": "pattern"
+        },
+        "repeats": 1,
+        "position_swap": "auto",
+        "aggregation": "mean",
+        "min_valid_judges": 1
+    },
+    "analysis_report": false,
+    "collect_perf": true,
+    "use_sandbox": false,
+    "sandbox_type": "docker",
+    "sandbox_manager_config": {},
+    "evalscope_version": "1.15.0",
+    "model": "qwen3.8-27b",
+    "generation_config": {
+        "batch_size": 16,
+        "max_tokens": 4096,
+        "temperature": 0.0
+    },
+    "sandbox": {
+        "enabled": false,
+        "engine": "docker",
+        "default_config": {},
+        "manager_config": {},
+        "pool_size": null
+    },
+    "agent_config": null
+}
+2026-11-22 06:47:24 - evalscope - INFO: Start loading benchmark dataset: general_mcq
+2026-11-22 06:47:24 - evalscope - WARNING: general_mcq: 50 samples to evaluate (1 subset, --limit=50 per subset). Remove `--limit` for a formal evaluation.
+2026-11-22 06:47:24 - evalscope - INFO: Subsets of general_mcq: ['default']
+2026-11-22 06:47:24 - evalscope - INFO: Loading model for prediction...
+2026-11-22 06:47:24 - evalscope - INFO: Creating model qwen3.8-27b with eval_type=openai_api base_url=https://zhanglunet--qwen27b-vllm-serve.us-east.modal.run/v1, config={'retries': 5, 'retry_interval': 10, 'batch_size': 16, 'max_tokens': 4096, 'temperature': 0.0, 'anthropic_cache_strategy': 'evaluation'}, model_args={}
+2026-11-22 06:47:25 - evalscope - INFO: Model loaded successfully.
+2026-11-22 06:48:24 - evalscope - INFO: Evaluating[general_mcq]  14%| 7/50 [Elapsed: 01:00 < Remaining: 05:18,  7.41s/it]
+2026-11-22 06:49:24 - evalscope - INFO: Evaluating[general_mcq]  46%| 23/50 [Elapsed: 02:00 < Remaining: 01:22,  3.05s/it]
+2026-11-22 06:50:24 - evalscope - INFO: Evaluating[general_mcq]  80%| 40/50 [Elapsed: 03:00 < Remaining: 00:56,  5.67s/it]
+2026-11-22 06:51:24 - evalscope - INFO: Evaluating[general_mcq]  98%| 49/50 [Elapsed: 04:00 < Remaining: 00:04,  4.01s/it]
+2026-11-22 06:51:25 - evalscope - INFO: Evaluating[general_mcq] 100%| 50/50 [Elapsed: 04:00 < Remaining: 00:00,  6.50s/it]
+2026-11-22 06:51:25 - evalscope - INFO: general_mcq: predictions complete, aggregating scores...
+2026-11-22 06:51:25 - evalscope - INFO: Aggregating scores for subset: default
+2026-11-22 06:51:25 - evalscope - INFO: Generating report...
+2026-11-22 06:51:25 - evalscope - INFO: 
+general_mcq report table:
+┌─────────────┬─────────────┬────────────┬──────────┬───────┬───────────┬─────────┐
+│ Model       │ Dataset     │ Metric     │ Subset   │   Num │   Correct │ Score   │
+├─────────────┼─────────────┼────────────┼──────────┼───────┼───────────┼─────────┤
+│ qwen3.8-27b │ General-MCQ │ Accuracy ↑ │ default  │    50 │        34 │ 68%     │
+└─────────────┴─────────────┴────────────┴──────────┴───────┴───────────┴─────────┘ 
+
+2026-11-22 06:51:25 - evalscope - INFO: Skipping report analysis (`analysis_report=False`).
+2026-11-22 06:51:25 - evalscope - INFO: Dump report to: ./eval/outputs/20261122_064724/reports/qwen3.8-27b/general_mcq.json 
+
+2026-11-22 06:51:25 - evalscope - INFO: 
+general_mcq perf table:
+Model        Dataset        Num  Avg Lat    Avg TTFT    Avg TPOT    Avg Thpt       Avg In    Avg Out
+-----------  -----------  -----  ---------  ----------  ----------  -----------  --------  ---------
+qwen3.8-27b  General-MCQ     50  60.771 s   —           —           42.21 tok/s       284       2565
+
+2026-11-22 06:51:25 - evalscope - INFO: Benchmark general_mcq evaluation finished.
+2026-11-22 06:51:25 - evalscope - INFO: Running[eval] 100%| 1/1 [Elapsed: 04:01 < Remaining: 00:00, 241.01s/benchmark]
+2026-11-22 06:51:25 - evalscope - INFO: Overall report table: 
+┌─────────────┬─────────────┬────────────┬──────────┬───────┬───────────┬─────────┐
+│ Model       │ Dataset     │ Metric     │ Subset   │   Num │   Correct │ Score   │
+├─────────────┼─────────────┼────────────┼──────────┼───────┼───────────┼─────────┤
+│ qwen3.8-27b │ General-MCQ │ Accuracy ↑ │ default  │    50 │        34 │ 68%     │
+└─────────────┴─────────────┴────────────┴──────────┴───────┴───────────┴─────────┘ 
+
+2026-11-22 06:51:25 - evalscope - INFO: Overall perf table: 
+Model        Dataset        Num  Avg Lat    Avg TTFT    Avg TPOT    Avg Thpt       Avg In    Avg Out
+-----------  -----------  -----  ---------  ----------  ----------  -----------  --------  ---------
+qwen3.8-27b  General-MCQ     50  60.771 s   —           —           42.21 tok/s       284       2565 
+
+2026-11-22 06:51:27 - evalscope - INFO: HTML report generated: /home/hatch/workspace/hackathon-infra/eval/outputs/20261122_064724/reports/report.html
+2026-11-22 06:51:27 - evalscope - INFO: Finished evaluation for qwen3.8-27b on ['general_mcq']
+2026-11-22 06:51:27 - evalscope - INFO: Output directory: ./eval/outputs/20261122_064724

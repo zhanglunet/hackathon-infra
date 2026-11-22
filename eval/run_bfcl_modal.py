@@ -35,8 +35,14 @@ import argparse
 import os
 import sys
 
-MODEL_ID = "qwen3.8-27b-fp8-modal-FC"
+MODEL_ID = os.environ.get("BFCL_MODEL_ID", "qwen3.8-27b-fp8-modal-FC")
 SERVED_NAME = "qwen3.8-27b"
+# 显示名随权重精度走（BF16 对照时用 BFCL_MODEL_ID=qwen3.8-27b-bf16-modal-FC 注入）。
+DISPLAY_NAME = (
+    "Qwen3.8-27B-BF16 (Modal H100, FC)"
+    if "bf16" in MODEL_ID
+    else "Qwen3.8-27B-FP8 (Modal H100, FC)"
+)
 
 
 def _register_model():
@@ -112,7 +118,7 @@ def _register_model():
 
     MODEL_CONFIG_MAPPING[MODEL_ID] = ModelConfig(
         model_name=SERVED_NAME,
-        display_name="Qwen3.8-27B-FP8 (Modal H100, FC)",
+        display_name=DISPLAY_NAME,
         url="https://github.com/zhanglunet/hackathon-infra",
         org="Qwen",
         license="apache-2.0",

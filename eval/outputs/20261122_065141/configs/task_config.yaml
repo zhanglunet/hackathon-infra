@@ -1,0 +1,120 @@
+agent_config: null
+analysis_report: false
+api_key: '**********'
+api_url: https://zhanglunet--qwen27b-vllm-serve.us-east.modal.run/v1
+chat_template: null
+collect_perf: true
+dataset_args:
+  live_code_bench:
+    dataset_id: /home/hatch/workspace/hackathon-infra/eval/data/lcb_v6_flat
+    subset_list:
+    - default
+dataset_dir: /home/hatch/.cache/modelscope/hub/datasets
+dataset_hub: modelscope
+datasets:
+- live_code_bench
+debug: false
+dry_run: false
+enable_progress_tracker: false
+eval_backend: Native
+eval_batch_size: 16
+eval_config: null
+eval_type: openai_api
+evalscope_version: 1.15.0
+evaluation_identity:
+  benchmarks:
+    live_code_bench:
+      cache_source: null
+      evaluation_version: v1.1
+      fingerprint: sha256:8504ba0704cb78f353f491855ae596d8dc1f765aa91000fab6151e79a2575b73
+      review_pending: false
+  schema_version: 1
+generation_config:
+  batch_size: 16
+  max_tokens: 4096
+  temperature: 0.0
+ignore_errors: false
+judge:
+  aggregation: mean
+  contract:
+    prompt_template: null
+    score_mapping: null
+    score_type: pattern
+    system_prompt: null
+  min_valid_judges: 1
+  models: []
+  position_swap: auto
+  repeats: 1
+  strategy: auto
+limit: 40
+model: qwen3.8-27b
+model_args: {}
+model_id: qwen3.8-27b
+model_task: text_generation
+no_timestamp: false
+repeats: 1
+rerun_review: false
+resolved_benchmarks:
+  live_code_bench:
+    aggregation: mean_and_pass_at_k
+    dataset_hub: modelscope
+    dataset_id: /home/hatch/workspace/hackathon-infra/eval/data/lcb_v6_flat
+    dataset_revision: null
+    default_subset: default
+    dependencies: {}
+    eval_split: test
+    extra_params:
+      debug: false
+      end_date: null
+      start_date: null
+    few_shot_num: 0
+    few_shot_prompt_template: null
+    few_shot_random: false
+    filters: null
+    max_image_bytes: null
+    metric_list:
+    - accuracy
+    name: live_code_bench
+    primary_metric:
+      aggregation: pass_at_k
+      dimensions:
+        k: 1
+      name: accuracy
+    prompt_template: '### Question:
+
+      {question_content}
+
+
+      {format_prompt} ### Answer: (use the provided format with backticks)
+
+
+      '
+    query_template: null
+    sandbox_config:
+      image: python:3.11-slim
+      tools_config:
+        python_executor: {}
+        shell_executor: {}
+    shuffle: false
+    shuffle_choices: false
+    subset_list:
+    - default
+    system_prompt: You are an expert Python programmer. You will be given a question
+      (problem specification) and will generate a correct Python program that matches
+      the specification and passes all tests. You will NOT return anything except
+      for the program.
+    train_split: null
+sandbox:
+  default_config: {}
+  enabled: false
+  engine: docker
+  manager_config: {}
+  pool_size: null
+sandbox_manager_config: {}
+sandbox_type: docker
+seed: 42
+stream: null
+timeout: null
+use_cache: null
+use_sandbox: false
+work_dir: ./eval/outputs/20261122_065141
