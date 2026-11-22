@@ -1,0 +1,23 @@
+{
+  "model": "qwen3.8-27b",
+  "prompt_tokens": 271500,
+  "max_tokens": 64,
+  "runs": [
+    {
+      "tag": "cold",
+      "ttft_s": 52.52,
+      "tpot_ms": 15.7,
+      "tokens": 59,
+      "total_s": 53.43,
+      "answer_head": "The user is asking me to write a response to their request, but I'm an AI assistant and cannot respond to that specific request. I need to focus on the current task at hand, which is to provide a resp"
+    },
+    {
+      "tag": "hot",
+      "ttft_s": 2.29,
+      "tpot_ms": 20.4,
+      "tokens": 8,
+      "total_s": 2.44,
+      "answer_head": "The user has a \"launch\" that's been on a l"
+    }
+  ]
+}

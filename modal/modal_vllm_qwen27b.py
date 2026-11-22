@@ -58,6 +58,14 @@ GPU_MEM_UTIL = os.environ.get("GPU_MEM_UTIL", "0.90")
 # vLLM 0.34.0 的 --gdn-prefill-backend（choices flashinfer/triton/cutedsl/
 # aiter_flydsl/sycl/hip），默认 auto 在 H200（SM90）上选 flashinfer。
 GDN_PREFILL_BACKEND = os.environ.get("GDN_PREFILL_BACKEND", "")  # "" | "triton" | ...
+# 全注意力后端：空 = 默认（auto→Hopper 上是 FA3，profiling 轮实测
+# _vllm_fa3_C::fwd 占冷请求 GPU 时间约 65%）；"FLASHINFER" / "TRITON_ATTN"
+# 对照用。2026-11-22 源码核实（vllm 0.34.0）：AttentionBackendEnum 含两者；
+# FlashInfer 要求 head_size ∈ {64,128,256,512}（本模型 256）、支持 fp8 KV、
+# 算力 SM80–SM12.1（H200 是 SM90）；Triton 要求 head_size ≥ 32、支持 fp8 KV、
+# 算力不限。显式指定时无效会直接报 ValueError（不静默回退），日志
+# "Using %s backend." 可作切换证据。只影响 16 层全注意力，GDN 层走自己的后端。
+ATTENTION_BACKEND = os.environ.get("ATTENTION_BACKEND", "")  # "" | "FLASHINFER" | "TRITON_ATTN"
 # torch profiler 配置（JSON 字符串）：空 = 不开。开时写
 # --profiler-config '{"profiler":"torch","torch_profiler_dir":"/models/profiler",...}'，
 # trace 落进 Volume（/models 挂载点），随后 /start_profile、/stop_profile
@@ -88,6 +96,7 @@ _CONTAINER_ENV = {
     "VLLM_USE_BREAKABLE_CUDAGRAPH": VLLM_USE_BREAKABLE_CUDAGRAPH,
     "GPU_MEM_UTIL": GPU_MEM_UTIL,
     "GDN_PREFILL_BACKEND": GDN_PREFILL_BACKEND,
+    "ATTENTION_BACKEND": ATTENTION_BACKEND,
     "PROFILER_CONFIG": PROFILER_CONFIG,
     # vLLM 0.34.0 会先校验 max_model_len ≤ config 的 max_position_embeddings，
     # 再应用 --hf-overrides；超原生上限必须另设此变量才放行（2026-11-21
@@ -184,6 +193,8 @@ def serve():
         cmd += ["--compilation-config", json.dumps({"mode": int(COMPILATION_MODE)})]
     if GDN_PREFILL_BACKEND:
         cmd += ["--gdn-prefill-backend", GDN_PREFILL_BACKEND]
+    if ATTENTION_BACKEND:
+        cmd += ["--attention-backend", ATTENTION_BACKEND]
     if PROFILER_CONFIG:
         cmd += ["--profiler-config", PROFILER_CONFIG]
     if MAX_MODEL_LEN > NATIVE_LEN:

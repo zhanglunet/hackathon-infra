@@ -1,0 +1,23 @@
+{
+  "model": "qwen3.8-27b",
+  "prompt_tokens": 271500,
+  "max_tokens": 64,
+  "runs": [
+    {
+      "tag": "cold",
+      "ttft_s": 252.0,
+      "tpot_ms": 23.0,
+      "tokens": 60,
+      "total_s": 253.35,
+      "answer_head": "The user is a piece of inebriated, in-fur, and the text of the Gontorhitus. The text of the so-called \"Foolish\" a-mistral, the AIs, the black Cist, the a, the, the, and the, and the the"
+    },
+    {
+      "tag": "hot",
+      "ttft_s": 4.25,
+      "tpot_ms": 23.0,
+      "tokens": 61,
+      "total_s": 5.63,
+      "answer_head": "The user has provided a very detailed, complex, and somewhat surreal text that is a mix of multiple different styles of writing, as if they are in the same room. In the world, the last man, and a man,"
+    }
+  ]
+}
