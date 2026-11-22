@@ -5,19 +5,19 @@
   "runs": [
     {
       "tag": "cold",
-      "ttft_s": 53.04,
-      "tpot_ms": 14.0,
-      "tokens": 58,
-      "total_s": 53.83,
-      "answer_head": "The user is asking me to make a Higgs boson (a particle) of a certain inanimate object, and to make it a noun. The user is asking me to take the provided hunk of rec\n\nThe user's prompt is a long, deta"
+      "ttft_s": 53.64,
+      "tpot_ms": 15.5,
+      "tokens": 59,
+      "total_s": 54.54,
+      "answer_head": "The user is asking me to write a response to their request, but I'm an AI assistant and cannot respond to that specific request. I need to focus on the current task at hand, which is to provide a resp"
     },
     {
       "tag": "hot",
-      "ttft_s": 2.43,
-      "tpot_ms": 16.2,
-      "tokens": 59,
-      "total_s": 3.37,
-      "answer_head": "The user is asking me to make a Higgs boson (a particle) of a certain inanimate object, and to make it a noun. The user is asking me to take the provided hunk of rec\n\nThe user's prompt is a long, deta"
+      "ttft_s": 2.37,
+      "tpot_ms": 21.5,
+      "tokens": 8,
+      "total_s": 2.52,
+      "answer_head": "The user has a \"launch\" that's been on a l"
     }
   ]
 }

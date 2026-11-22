@@ -46,6 +46,12 @@ MAX_NUM_BATCHED_TOKENS = int(os.environ.get("MAX_NUM_BATCHED_TOKENS", "8192"))
 # -cc='{"mode":3}'）。2026-11-21 实测：默认 eager 下 272K 冷 TTFT
 # 约 51 秒（约 15% MFU），编译是下一轮主攻方向。
 COMPILATION_MODE = os.environ.get("COMPILATION_MODE", "")  # "" | "1" | "2" | "3"
+# breakable CUDA 图开关：vLLM 0.34.0 对 Qwen3.5 架构默认自动开 breakable
+# cudagraph，开启后会把 compilation_config.mode 置回 NONE（vllm/config/
+# vllm.py:833），mode=3 因此静默失效（日志原文："Auto-enabling
+# VLLM_USE_BREAKABLE_CUDAGRAPH=1. Set VLLM_USE_BREAKABLE_CUDAGRAPH=0 to
+# opt out."）。设 "0" 可退出该路径再试 mode=3。默认 "1" 保持旧行为。
+VLLM_USE_BREAKABLE_CUDAGRAPH = os.environ.get("VLLM_USE_BREAKABLE_CUDAGRAPH", "1")
 GPU_MEM_UTIL = os.environ.get("GPU_MEM_UTIL", "0.90")
 # GDN（线性注意力）prefill 后端：空 = 默认（auto→Hopper 上是 FlashInfer，
 # JIT 编译内核）；"triton" = Triton/FLA 后端，跳过 JIT。2026-11-21 源码核实：
@@ -79,6 +85,7 @@ _CONTAINER_ENV = {
     "MAX_NUM_SEQS": str(MAX_NUM_SEQS),
     "MAX_NUM_BATCHED_TOKENS": str(MAX_NUM_BATCHED_TOKENS),
     "COMPILATION_MODE": COMPILATION_MODE,
+    "VLLM_USE_BREAKABLE_CUDAGRAPH": VLLM_USE_BREAKABLE_CUDAGRAPH,
     "GPU_MEM_UTIL": GPU_MEM_UTIL,
     "GDN_PREFILL_BACKEND": GDN_PREFILL_BACKEND,
     "PROFILER_CONFIG": PROFILER_CONFIG,
