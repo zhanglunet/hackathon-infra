@@ -66,6 +66,13 @@ GDN_PREFILL_BACKEND = os.environ.get("GDN_PREFILL_BACKEND", "")  # "" | "triton"
 # 算力不限。显式指定时无效会直接报 ValueError（不静默回退），日志
 # "Using %s backend." 可作切换证据。只影响 16 层全注意力，GDN 层走自己的后端。
 ATTENTION_BACKEND = os.environ.get("ATTENTION_BACKEND", "")  # "" | "FLASHINFER" | "TRITON_ATTN"
+# CUDA 镜像开关：第 5 轮 FlashInfer 引擎起不来，报错
+# "Could not find nvcc"——debian_slim + pip 装 vllm 的镜像里没有 CUDA
+# toolkit，FlashInfer batch-prefill 要在 warmup 时 JIT 编译 CUDA 内核。
+# 设 "1" 时走 nvidia/cuda:12.8.0-devel-ubuntu24.04 官方基础镜像
+# （含 nvcc 12.8，与 vllm 0.34.0 pip 轮子的 CUDA 12.8 匹配）；
+# 默认 "0" 走 debian_slim，已验证的 FA3 路径一动不动。
+USE_CUDA_IMAGE = os.environ.get("USE_CUDA_IMAGE", "0")  # "0" | "1"
 # torch profiler 配置（JSON 字符串）：空 = 不开。开时写
 # --profiler-config '{"profiler":"torch","torch_profiler_dir":"/models/profiler",...}'，
 # trace 落进 Volume（/models 挂载点），随后 /start_profile、/stop_profile
@@ -107,10 +114,21 @@ _CONTAINER_ENV = {
 
 app = modal.App(APP_NAME)
 
-image = (
-    modal.Image.debian_slim(python_version="3.12")
-    .pip_install(f"vllm=={VLLM_VERSION}", "huggingface_hub")
-)
+if USE_CUDA_IMAGE == "1":
+    # FlashInfer 轮专用：官方 CUDA devel 镜像自带 nvcc 12.8（与 vllm
+    # 0.34.0 pip 轮子的 CUDA 12.8 匹配），FlashInfer warmup 时 JIT 编译
+    # 内核要用到它。add_python="3.12" 在该镜像里装 Python 3.12。
+    image = (
+        modal.Image.from_registry(
+            "nvidia/cuda:12.8.0-devel-ubuntu24.04", add_python="3.12"
+        ).pip_install(f"vllm=={VLLM_VERSION}", "huggingface_hub")
+    )
+else:
+    # 默认：debian_slim，已验证的 FA3 / BF16 路径都跑在这上面，别动。
+    image = (
+        modal.Image.debian_slim(python_version="3.12")
+        .pip_install(f"vllm=={VLLM_VERSION}", "huggingface_hub")
+    )
 
 volume = modal.Volume.from_name(VOLUME_NAME, create_if_missing=True)
 
@@ -147,6 +165,28 @@ def download_weights():
     print(f"分片数量：{shards}（预期 {EXPECTED_SHARDS}，按 {SHARD_GLOB} 计数）")
     assert shards == EXPECTED_SHARDS, "分片数量不对，下载可能不完整，请重跑。"
     print(f"[完成] 权重就绪：{MODEL_PATH}")
+
+
+@app.function(image=image, timeout=600)
+def check_nvcc():
+    """不挂 GPU，只验证容器里 nvcc 可用（第 6 轮 FlashInfer 前置检查）。
+    用法：USE_CUDA_IMAGE=1 python3 -m modal run modal/modal_vllm_qwen27b.py::check_nvcc
+    预期：nvcc --version 打印 12.8.x；torch.version.cuda 也是 12.8。"""
+    import shutil
+
+    for cmd in (
+        ["which", "nvcc"],
+        ["nvcc", "--version"],
+        ["python3", "-c", "import torch; print('torch', torch.__version__, 'cuda', torch.version.cuda)"],
+    ):
+        print(f"\n=== $ {' '.join(cmd)} ===")
+        out = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        print(out.stdout, end="")
+        if out.stderr:
+            print("[stderr]", out.stderr, end="")
+        print(f"[exit {out.returncode}]")
+    assert shutil.which("nvcc"), "容器里找不到 nvcc，USE_CUDA_IMAGE 镜像没生效。"
+    print("\n[完成] nvcc 可用")
 
 
 @app.function(
