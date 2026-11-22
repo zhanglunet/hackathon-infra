@@ -12,3 +12,4 @@
 | 2026-11-21 | Modal H200 profiling（瓶颈定位） | 瓶颈已定位：全注意力 FA3 约 65% + FP8 GEMM 约 25%，GDN 仅约 3%；GDN triton 轮 53.04 秒无改善；mode 降级原因已在源码定位（Qwen3.5 默认 breakable graphs） | [2026-11-21-modal-h200-profiling.md](2026-11-21-modal-h200-profiling.md) |
 | 2026-11-21 | 资源现状盘点 | 已核实，见正文 | [2026-11-21-资源就绪.md](2026-11-21-资源就绪.md) |
 | 2026-11-22 | Modal H100 EvalScope 精度自测（FP8） | AIME 17/30=56.67%，GPQA 35/50=70%，LCB 17/40=42.5%；BFCL 未跑（ModelScope 卡未批 + 本地文件 schema 不匹配）；Modal 并发修复（@modal.concurrent，吞吐 80→~850 tok/s） | [2026-11-22-modal-h100-evalscope.md](2026-11-22-modal-h100-evalscope.md) |
+| 2026-11-22 | Modal H100 bfcl_eval CLI 补跑 BFCL v3（FP8） | simple 前 50 题 **47/50=94.00%**；原生 tools 部署未开不可用，改走 qwen_agent；v3 数据垫片塞进 v4 loader；全程约 7 分钟，约 $0.47 | [2026-11-22-modal-h100-bfcl.md](2026-11-22-modal-h100-bfcl.md) |
