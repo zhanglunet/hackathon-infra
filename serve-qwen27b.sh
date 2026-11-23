@@ -91,6 +91,8 @@ KV_CACHE_DTYPE="${KV_CACHE_DTYPE:-fp8}"
 GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
 MAX_NUM_SEQS="${MAX_NUM_SEQS:-32}"
 TP_SIZE="${TP_SIZE:-1}"
+# 数据并行副本数（单机 8 卡起多副本测 Goodput 用，如 DP_SIZE=8 TP_SIZE=1）；默认不传（1）。
+DP_SIZE="${DP_SIZE:-}"
 # 已验证的调优项（2026-11-23 补，默认值照抄 modal 已验证值，见文件头说明）：
 MAX_NUM_BATCHED_TOKENS="${MAX_NUM_BATCHED_TOKENS:-65536}"
 # 注意用 - 而非 :-：传 ATTENTION_BACKEND="" 时保留空值，不传 --attention-backend、回落 FA3。
@@ -191,6 +193,10 @@ REASONING_ARGS=()
 if [ -n "$REASONING_PARSER" ]; then
     REASONING_ARGS=(--reasoning-parser "$REASONING_PARSER")
 fi
+DP_ARGS=()
+if [ -n "$DP_SIZE" ] && [ "$DP_SIZE" != "1" ]; then
+    DP_ARGS=(--data-parallel-size "$DP_SIZE")
+fi
 
 mkdir -p logs
 LOG_FILE="logs/vllm-serve-$(date +%Y%m%d-%H%M%S).log"
@@ -205,6 +211,7 @@ vllm serve "$MODEL_PATH" \
     --port "$PORT" \
     --served-model-name "$SERVED_NAME" \
     --tensor-parallel-size "$TP_SIZE" \
+    "${DP_ARGS[@]}" \
     --max-model-len "$MAX_MODEL_LEN" \
     "${QUANT_ARGS[@]}" \
     --kv-cache-dtype "$KV_CACHE_DTYPE" \

@@ -1,0 +1,13 @@
+.git
+.venv
+models/
+logs/
+eval/outputs/
+eval/data/
+probe/*.txt
+probe/*.json
+devlog/
+reports/
+site/
+__pycache__/
+*.pyc

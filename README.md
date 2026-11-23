@@ -10,7 +10,10 @@
 |---|---|
 | `setup-vllm.sh` | 检查 GPU/Python/磁盘，建虚拟环境，装 vLLM 0.34.0 + modelscope + huggingface_hub |
 | `download-model.sh` | 下 Qwen3.8-27B 权重：ModelScope 优先，HF（hf-mirror）备用；校验分片数和大小 |
-| `serve-qwen27b.sh` | 起 vLLM OpenAI 服务：272K 上下文、FP8、prefix caching、/metrics，端口 8000 |
+| `serve-qwen27b.sh` | 起 Qwen3.8-27B vLLM OpenAI 服务：272K 上下文、FP8、prefix caching、parser、DP/TP、/metrics，端口 8000 |
+| `download-deepseek.sh` | 下 DeepSeek-V4.1-Flash-1017 权重（约 511 GB / 48 分片）：ModelScope 优先，HF 断点续下 |
+| `serve-deepseek.sh` | 起 DeepSeek-V4.1-Flash-1017 8 卡 vLLM 服务（`deepseek_v41` tokenizer/parser、Engram CPU offload、272K） |
+| `Dockerfile` | 标准化推理容器镜像草稿（CUDA 13.0 devel + Python 3.12 + vLLM 0.34.0 + FlashInfer） |
 | `smoke-test.sh` | 冒烟测试：/health、/v1/models、流式出 token 测 TTFT/TPOT、/metrics |
 | `README.md` | 本文件 |
 | `EVALUATION.md` | 评测标准与要求提炼：模型、精度门槛、SLO、并发阶梯、提交物 |
@@ -127,25 +130,12 @@ bash smoke-test.sh
 
 ## 6. 之后：8 卡跑 DeepSeek-V4.1-Flash（比赛必选模型）
 
-等 8 卡机型到手（比赛机器是 8×RTX 6000D 84G；排练可用 8×A800/H800），
-改动只有这几处，其余流程（装环境、下权重、起服务、冒烟）完全一样：
+已按 vLLM 官方 recipe（`recipes.vllm.ai/deepseek-ai/DeepSeek-V4.1-Flash`）备好独立脚本（待 8×RTX 6000D 真机验证）：
 
-1. **权重**：DeepSeek-V4.1-Flash-1017 约 510 GB，磁盘至少留 650 GB；
-   下 FP8 版（`deepseek-ai/DeepSeek-V4.1-Flash`，仓库名以官方发布为准，
-   下之前先核对）。下载时间很长，建议用 `nohup` 后台跑。
-2. **启动**：把 `serve-qwen27b.sh` 里的 `TP_SIZE` 改成 8，
-   `MODEL_NAME` 改成 DeepSeek 的目录名，`SERVED_NAME` 改成
-   `deepseek-v4.1-flash`；`--max-model-len` 直接给 272000（DeepSeek
-   原生 1M 上下文，不用 YaRN）。其余参数（fp8 KV、prefix caching、
-   /metrics）照抄。
-3. **显存账本**：DeepSeek 是 MoE + MLA 压缩 KV，官方 KV 仅约 890 字节/token，
-   272K 上下文 KV 总共才约 242 MB——KV 不是瓶颈；瓶颈是 510 GB 权重
-   分到 8 张卡（每卡约 64 GB），留给激活和 CUDA 图的余量不多，
-   `GPU_MEM_UTIL` 保持 0.90，别贪 0.95。
-4. **可选优化**（排练后期再试，每项都要跑精度对照）：
-   MTP 推测解码（DeepSeek 自带 MTP 头，vLLM 需确认支持情况）、
-   `--enable-expert-parallel`、PD 分离（prefill/decode 拆到不同卡上）。
-   先保证“能跑 + 精度过关”，再抠吞吐。
+1. **下载权重**：`MODEL_DIR=/data/models bash download-deepseek.sh`（默认 `deepseek-ai/DeepSeek-V4.1-Flash-1017`，约 511 GB / 48 分片，磁盘至少留 650 GB；支持断点续下，建议 `nohup` 后台跑）。
+2. **启动服务**：`MODEL_DIR=/data/models bash serve-deepseek.sh`（默认 8 卡 TP、`MAX_MODEL_LEN=272000` 原生 1M 无需 YaRN、`--tokenizer-mode deepseek_v41`、`--tool-call-parser deepseek_v41`、`--reasoning-parser deepseek_v41`、`VLLM_ENGINE_READY_TIMEOUT_S=3600`）。
+3. **显存与 Engram 账本**：权重总计约 476 GiB，其中 Engram 记忆表占 183.1 GiB；全局 KV 仅约 890 字节/token（272K 上下文 KV 仅 ~242 MB）。脚本默认开 `ENGRAM_CPU_OFFLOAD=true`（将 183 GiB 卸载到 pinned 主机内存，每卡显存驻留仅 ~36.6 GiB）；真机验证后可对照 `ENGRAM_CPU_OFFLOAD=false`、DEP（`TP_SIZE=1 DP_SIZE=8 ENABLE_EP=1`）、`LANGUAGE_MODEL_ONLY=1`（跳过 32 层 ViT）。
+4. **可选加速**（每项均须重跑精度对照）：`DSPARK_TOKENS=5`（V4.1 已弃用 MTP，改用内置 DSpark 5-token 推测解码）、PD 分离。先保证「能跑 + 精度过关」，再抠 Goodput。
 
 ## 7. 下一步：评测（标准与测试集已在仓库里）
 
