@@ -3,8 +3,11 @@
 #
 # 设计原则：
 #   1. 离线先备齐所有数据、依赖与 BFCL 垫片，再起 Modal 部署（杜绝 GPU 空转）
-#   2. 用 trap 保证任何报错或 Ctrl-C 都自动停掉 Modal 部署并恢复 bfcl_eval 包内原文件
+#   2. 用 trap 保证任何报错或 Ctrl-C 都自动停掉本轮 Modal 部署（仅当本轮
+#      部署成功时）并删除 BFCL 隔离环境；已装的 bfcl_eval 包原样不动
 #   3. FP8 阶段把 P0-3（native BFCL）与 P0-1/P0-2（AIME/GPQA/LCB）合并在同一次部署内跑完，省一次冷启动
+#   4. 部署前先排掉残留的同名部署，/health 200 后再验 /v1/models 的 served 名，
+#      防止旧实例冒充本轮端点（#5 评审加的隔离要求）
 #
 # 用法（在已配好 modal / evalscope / bfcl_eval 的机器上、仓库根目录执行）：
 #   # 第 0 步：纯离线预检 + 拉取缺失的 LCB parquet（$0，不碰 GPU）
@@ -72,23 +75,21 @@ SHIM_Q="$REPO_ROOT/eval/data/bfcl_v3_shim/BFCL_v3_simple_50.json"
 SHIM_A="$REPO_ROOT/eval/data/bfcl_v3_shim/BFCL_v3_simple_50_possible_answer.json"
 
 DEPLOYED=0
-SHIM_BACKUP_DIR=""
-BFCL_PKG_DATA=""
+BFCL_ISOLATED_DIR=""
 T_DEPLOY_START=0
 
 cleanup() {
     local rc=$?
     set +e
-    if [ -n "$SHIM_BACKUP_DIR" ] && [ -d "$SHIM_BACKUP_DIR" ] && [ -n "$BFCL_PKG_DATA" ]; then
-        echo
-        echo "== [清理] 恢复 bfcl_eval 包内原 v4 数据文件 =="
-        cp "$SHIM_BACKUP_DIR/data_simple_python.json" "$BFCL_PKG_DATA/BFCL_v4_simple_python.json"
-        cp "$SHIM_BACKUP_DIR/ans_simple_python.json" "$BFCL_PKG_DATA/possible_answer/BFCL_v4_simple_python.json"
-        rm -rf "$SHIM_BACKUP_DIR"
+    # BFCL 垫片只装在本轮临时目录的包副本里，已装的包原样不动，
+    # 这里只需删临时目录，不用恢复原文件（#5 评审：垫片独立环境）。
+    if [ -n "$BFCL_ISOLATED_DIR" ] && [ -d "$BFCL_ISOLATED_DIR" ]; then
+        rm -rf "$BFCL_ISOLATED_DIR"
+        echo "== [清理] 已删除本轮 BFCL 隔离环境 $BFCL_ISOLATED_DIR =="
     fi
     if [ "$DEPLOYED" -eq 1 ]; then
         echo
-        echo "== [清理] 停止 Modal 部署 qwen27b-vllm（防止 GPU 空转）=="
+        echo "== [清理] 停止本轮 Modal 部署 qwen27b-vllm（防止 GPU 空转）=="
         python3 -m modal app stop --yes qwen27b-vllm || true
         local t_end
         t_end="$(date +%s)"
@@ -99,6 +100,10 @@ cleanup() {
         local code
         code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$MODAL_APP_URL/health" || echo 000)"
         echo "停机复核 /health HTTP 状态码：$code（预期 404）"
+        if [ "$code" != "404" ] && [ "$code" != "000" ]; then
+            echo "[警告] 停机后 /health 仍返回 $code，部署可能还在跑、继续计费！"
+            echo "       请手动执行：python3 -m modal app stop --yes qwen27b-vllm"
+        fi
     fi
     exit "$rc"
 }
@@ -126,14 +131,60 @@ check_prereqs() {
 }
 
 install_bfcl_shim() {
-    BFCL_PKG_DATA="$(python3 -c 'import bfcl_eval, pathlib; print(pathlib.Path(bfcl_eval.__file__).parent / "data")')"
-    SHIM_BACKUP_DIR="$(mktemp -d)"
-    # 分文件名备份，避免之前 devlog 踩过的同名覆盖坑
-    cp "$BFCL_PKG_DATA/BFCL_v4_simple_python.json" "$SHIM_BACKUP_DIR/data_simple_python.json"
-    cp "$BFCL_PKG_DATA/possible_answer/BFCL_v4_simple_python.json" "$SHIM_BACKUP_DIR/ans_simple_python.json"
-    cp "$SHIM_Q" "$BFCL_PKG_DATA/BFCL_v4_simple_python.json"
-    cp "$SHIM_A" "$BFCL_PKG_DATA/possible_answer/BFCL_v4_simple_python.json"
-    echo "[完成] BFCL v3 垫片已安装（退出时自动恢复原 v4 文件）。"
+    # 垫片隔离：把已装的 bfcl_eval 整个包拷到本轮临时目录，垫片只装进副本，
+    # 再把副本目录插到 PYTHONPATH 最前面；已装的包原样不动，退出时只删临时目录。
+    # 之前是直接改 site-packages 里的数据文件：并发轮次会互相覆盖，
+    # 被 kill -9 时 trap 跑不到、垫片残留，下轮会拿 v3 数据当 v4 跑（#5 评审）。
+    local pkg_root pkg_data n_v4 import_path
+    pkg_root="$(python3 -c 'import bfcl_eval, pathlib; print(pathlib.Path(bfcl_eval.__file__).parent.parent)')"
+    pkg_data="$pkg_root/bfcl_eval/data"
+    # 守卫：先确认已装的是原版 v4 数据（400 行）；若只有 50 行，
+    # 说明之前某轮被强杀、垫片残留，复制过去也会是错的，先报错停下。
+    n_v4="$(grep -c . "$pkg_data/BFCL_v4_simple_python.json" || true)"
+    if [ "$n_v4" != "400" ]; then
+        echo "[错误] 已装的 bfcl_eval 数据文件只有 $n_v4 行（原版 v4 应为 400 行），疑似旧垫片残留。"
+        echo "       请先恢复：pip install --force-reinstall --no-deps bfcl-eval==2025.10.27.1"
+        exit 1
+    fi
+    BFCL_ISOLATED_DIR="$(mktemp -d)"
+    cp -r "$pkg_root/bfcl_eval" "$BFCL_ISOLATED_DIR/bfcl_eval"
+    # 删掉拷过来的 __pycache__，避免旧字节码与新路径的源文件 mtime 对不上。
+    find "$BFCL_ISOLATED_DIR" -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null || true
+    cp "$SHIM_Q" "$BFCL_ISOLATED_DIR/bfcl_eval/data/BFCL_v4_simple_python.json"
+    cp "$SHIM_A" "$BFCL_ISOLATED_DIR/bfcl_eval/data/possible_answer/BFCL_v4_simple_python.json"
+    export PYTHONPATH="$BFCL_ISOLATED_DIR${PYTHONPATH:+:$PYTHONPATH}"
+    # 核对：本轮 python3 必须 import 到副本，而不是已装的包。
+    import_path="$(python3 -c 'import bfcl_eval; print(bfcl_eval.__file__)')"
+    case "$import_path" in
+        "$BFCL_ISOLATED_DIR"/*)
+            echo "[完成] BFCL v3 垫片已装进本轮隔离环境（$BFCL_ISOLATED_DIR），已装的包未动。"
+            ;;
+        *)
+            echo "[错误] BFCL 隔离环境未生效，import 到的是 $import_path"
+            exit 1
+            ;;
+    esac
+}
+
+ensure_no_stale_deploy() {
+    # 部署前先确认没有残留的同名部署：若上一轮崩了没停干净，旧实例还在，
+    # 本轮部署失败时 /health 照样 200，测到的会是旧实例（#5 评审）。
+    # 本脚本按“同一时间只跑一轮”使用，残留部署一律先停掉再部署本轮。
+    # 注意：modal app list 也会列出最近停掉的应用，名字命中不一定是在跑；
+    # 误判的代价只是一次无害的 stop，宁可多停一次。
+    echo "== 预检：确认无残留的 qwen27b-vllm 部署 =="
+    local listing
+    listing="$(python3 -m modal app list 2>/dev/null || true)"
+    if [ -z "$listing" ]; then
+        echo "[警告] 查不到 Modal 应用列表（可能离线），跳过残留检查。"
+        return 0
+    fi
+    if echo "$listing" | grep -q "qwen27b-vllm"; then
+        echo "[警告] 发现残留的 qwen27b-vllm，先停掉它再部署本轮。"
+        python3 -m modal app stop --yes qwen27b-vllm || true
+    else
+        echo "[通过] 无残留部署。"
+    fi
 }
 
 wait_health() {
@@ -142,7 +193,16 @@ wait_health() {
         code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 60 "$MODAL_APP_URL/health" || echo 000)"
         if [ "$code" = "200" ]; then
             echo "[就绪] /health 返回 200（第 $i 次检查）"
-            return 0
+            # 再验一次端点身份：/v1/models 里必须有本轮要用的 served 名，
+            # 否则可能是旧实例（或别的部署）在冒充本轮端点（#5 评审）。
+            local models
+            models="$(curl -s --max-time 15 "$MODAL_APP_URL/v1/models" || true)"
+            if echo "$models" | grep -q '"qwen3.8-27b"'; then
+                echo "[就绪] /v1/models 确认 served 名 qwen3.8-27b，本轮端点无误"
+                return 0
+            fi
+            echo "[错误] /health 是 200，但 /v1/models 里没有 qwen3.8-27b（端点不是本轮部署）"
+            return 1
         fi
         echo "  [$i/60] HTTP $code，10 秒后重试..."
         sleep 10
@@ -268,17 +328,24 @@ case "$MODE" in
         if [ "$RUN_BFCL" = "1" ]; then
             install_bfcl_shim
         fi
+        ensure_no_stale_deploy
         echo "== 启动 Modal 部署：GPU=$MODAL_GPU QUANT=$QUANT MAX_MODEL_LEN=$MAX_MODEL_LEN MAX_NUM_SEQS=$MAX_NUM_SEQS =="
         T_DEPLOY_START="$(date +%s)"
-        DEPLOYED=1
-        MODAL_GPU="$MODAL_GPU" \
-        QUANT="$QUANT" \
-        MAX_MODEL_LEN="$MAX_MODEL_LEN" \
-        MAX_NUM_SEQS="$MAX_NUM_SEQS" \
-        TOOL_CALL_PARSER="qwen3_coder" \
-        REASONING_PARSER="qwen3" \
-        MODAL_MAX_INPUTS="128" \
-            python3 -m modal deploy modal/modal_vllm_qwen27b.py
+        # 注意：DEPLOYED 只在部署成功后才置 1。之前是部署前就置 1，
+        # 部署失败时 trap 照样去停共享应用，可能杀掉别人的部署（#5 评审）。
+        if MODAL_GPU="$MODAL_GPU" \
+            QUANT="$QUANT" \
+            MAX_MODEL_LEN="$MAX_MODEL_LEN" \
+            MAX_NUM_SEQS="$MAX_NUM_SEQS" \
+            TOOL_CALL_PARSER="qwen3_coder" \
+            REASONING_PARSER="qwen3" \
+            MODAL_MAX_INPUTS="128" \
+                python3 -m modal deploy modal/modal_vllm_qwen27b.py; then
+            DEPLOYED=1
+        else
+            echo "[错误] Modal 部署失败，本轮没有部署任何实例，不停共享应用。"
+            exit 1
+        fi
         wait_health
         if [ "$RUN_BFCL" = "1" ]; then
             probe_native_tools

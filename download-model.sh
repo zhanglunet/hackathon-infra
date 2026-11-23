@@ -49,19 +49,28 @@ TARGET_DIR="$MODEL_DIR/$LOCAL_NAME"
 
 echo "== 目标：$MODEL_ID（$QUANT），下载到 $TARGET_DIR =="
 echo "== 1/4 检查磁盘空间（至少需要 ${NEED_FREE_GB} GB 空闲） =="
-FREE_GB="$(df -BG --output=avail "$MODEL_DIR" 2>/dev/null | tail -1 | tr -dc '0-9')"
-if [ -z "$FREE_GB" ]; then
-    mkdir -p "$MODEL_DIR"
-    FREE_GB="$(df -BG --output=avail . | tail -1 | tr -dc '0-9')"
-fi
+# 先建目录再 df：全新环境没有 models/ 时，df 不存在的路径会失败，
+# 在 set -e + pipefail 下直接让脚本在创建目录前退出（#5 评审发现）。
+# 之前兜底 df 的是当前目录 .，和目标盘可能不是同一文件系统，数字会错。
+mkdir -p "$MODEL_DIR"
+FREE_GB="$(df -BG --output=avail "$MODEL_DIR" | tail -1 | tr -dc '0-9')"
 echo "可用磁盘：${FREE_GB} GB"
 if [ "${FREE_GB:-0}" -lt "$NEED_FREE_GB" ]; then
     echo "[错误] 磁盘空间不足。AutoDL 租机时请挂数据盘，或先清理空间。"
     exit 1
 fi
 
-if [ -f "$TARGET_DIR/model.safetensors.index.json" ]; then
-    echo "[提示] $TARGET_DIR 已有权重文件，跳过下载，直接校验。"
+# 只有分片数对得上才算“已有完整权重”：只看 index.json 会在中断续下时
+# 误判——半成品也可能已有 index.json，跳过下载后校验必失败，还得整删重下。
+weights_complete() {
+    [ -f "$TARGET_DIR/model.safetensors.index.json" ] || return 1
+    local n
+    n="$(find "$TARGET_DIR" -maxdepth 1 -name "$SHARD_GLOB" | wc -l)"
+    [ "$n" -eq "$EXPECTED_SHARDS" ]
+}
+
+if weights_complete; then
+    echo "[提示] $TARGET_DIR 已有完整权重（$EXPECTED_SHARDS 个分片），跳过下载，直接校验。"
 else
     echo "== 2/4 下载（ModelScope 优先） =="
     mkdir -p "$TARGET_DIR"
@@ -71,8 +80,8 @@ else
         echo "[完成] ModelScope 下载成功。"
     else
         echo "[警告] ModelScope 下载失败，改走 Hugging Face（hf-mirror 镜像）。"
-        rm -rf "$TARGET_DIR"
-        mkdir -p "$TARGET_DIR"
+        # 不删 TARGET_DIR：半成品留在原地，hf download 会跳过已下完的分片续下；
+        # 删掉等于逼用户重下几十 GB（#5 评审发现）。
         # hf CLI（huggingface_hub 2.x）：老名字 huggingface-cli 已被 hf 取代
         #   hf download <owner/name> --local-dir <目录>
         HF_ENDPOINT="${HF_ENDPOINT:-https://hf-mirror.com}" \

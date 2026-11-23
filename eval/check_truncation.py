@@ -5,6 +5,13 @@
 - 未开 --reasoning-parser（<think>...</think> 内联在 content 里）
 - 开启 --reasoning-parser qwen3（reasoning 独立字段，截断主要看 stop_reason）
 
+判定口径（#5 评审校准后）：
+- 每题三态：截断（stop_reason 是 max_tokens/length）、完成（有 stop_reason
+  且不是截断）、未知（拿不到 stop_reason，如缺 predictions 文件）。
+  未知不再拿 </think> 缺失当截断证据；</think> 计数只作诊断参考。
+- 逐题对照按稳定题目 ID（user 消息内容 + target 的 sha256）配对，
+  不再按 index；对照时按数据集名逐集配对，不再只比第一集。
+
 用法：
   # 扫描 eval/outputs/ 下所有 EvalScope 轮次
   python3 eval/check_truncation.py
@@ -18,6 +25,7 @@
 
 import argparse
 import glob
+import hashlib
 import json
 import math
 import os
@@ -25,6 +33,33 @@ import re
 import sys
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
+
+
+def _stable_qid(row: dict) -> Optional[str]:
+    """稳定题目 ID：user 角色消息内容 + target 的 sha256。
+    - review 行里 messages[i].id 是每轮随机生成的，不能跨轮配对；
+    - index 在同一数据集同一 limit 下碰巧稳定，但 limit 或数据集版本一变就错位；
+    - user 消息内容就是题目本身：AIME/GPQA 只有一条 user 消息，
+      LCB 的题目在第二条 user 消息（第一条是共享的 system 指令），
+      所以拼全部 user 消息内容。
+    """
+    msgs = row.get("messages") or []
+    user_texts = [
+        m.get("content", "")
+        for m in msgs
+        if isinstance(m, dict) and m.get("role") == "user"
+    ]
+    if not user_texts:
+        # 兜底：没有 role 标记时用全部非 assistant 消息。
+        user_texts = [
+            m.get("content", "")
+            for m in msgs
+            if isinstance(m, dict) and m.get("role") != "assistant"
+        ]
+    if not user_texts:
+        return None
+    key = "\n".join(user_texts) + "|" + json.dumps(row.get("target"), ensure_ascii=False)
+    return hashlib.sha256(key.encode("utf-8")).hexdigest()[:16]
 
 
 def _parse_task_config(run_dir: Path) -> Dict[str, str]:
@@ -94,9 +129,12 @@ def analyze_run(run_dir: Path) -> List[dict]:
         trunc_pass = 0
         done_count = 0
         done_pass = 0
+        unknown_count = 0
+        unknown_pass = 0
         no_think_end = 0
         out_tokens: List[int] = []
-        per_idx_pass: Dict[int, bool] = {}
+        per_qid_pass: Dict[str, bool] = {}
+        qid_index: Dict[str, Optional[int]] = {}
 
         with rpath.open(encoding="utf-8") as f:
             for line in f:
@@ -106,7 +144,12 @@ def analyze_run(run_dir: Path) -> List[dict]:
                 idx = row.get("index")
                 total += 1
                 ok = _is_passed(row)
-                per_idx_pass[idx] = ok
+                qid = _stable_qid(row)
+                if qid is None and idx is not None:
+                    qid = f"index:{idx}"
+                if qid is not None:
+                    per_qid_pass[qid] = ok
+                    qid_index[qid] = idx
                 if ok:
                     passed_total += 1
 
@@ -120,26 +163,34 @@ def analyze_run(run_dir: Path) -> List[dict]:
                 if isinstance(otok, int):
                     out_tokens.append(otok)
 
-                # 兼容两种判断：优先用 stop_reason（开/关 reasoning-parser 都准）；
-                # 若无 predictions 文件，则回落检查 </think>。
+                # 诊断计数（只做参考，不参与截断/完成判定）：整行序列化后
+                # 有没有 </think>。
                 raw_text = json.dumps(row, ensure_ascii=False)
                 missing_think_end = "</think>" not in raw_text
                 if missing_think_end:
                     no_think_end += 1
 
+                # 三态判定：只有拿到 stop_reason 才能定截断/完成；
+                # 拿不到（缺 predictions 文件、或 choices 为空）就是未知，
+                # 不再拿 </think> 缺失当截断证据——之前会把无 predictions
+                # 的轮次整批误判成截断。
                 if stop_reason is not None:
-                    is_trunc = stop_reason in ("max_tokens", "length")
+                    state = "trunc" if stop_reason in ("max_tokens", "length") else "done"
                 else:
-                    is_trunc = missing_think_end
+                    state = "unknown"
 
-                if is_trunc:
+                if state == "trunc":
                     trunc_stop += 1
                     if ok:
                         trunc_pass += 1
-                else:
+                elif state == "done":
                     done_count += 1
                     if ok:
                         done_pass += 1
+                else:
+                    unknown_count += 1
+                    if ok:
+                        unknown_pass += 1
 
         out_tokens.sort()
         results.append(
@@ -157,12 +208,15 @@ def analyze_run(run_dir: Path) -> List[dict]:
                 "done": done_count,
                 "done_pass": done_pass,
                 "done_acc": (done_pass / done_count * 100.0) if done_count else 0.0,
+                "unknown": unknown_count,
+                "unknown_pass": unknown_pass,
                 "no_think_end": no_think_end,
                 "avg_tok": (sum(out_tokens) / len(out_tokens)) if out_tokens else 0.0,
                 "p50_tok": _percentile(out_tokens, 0.50),
                 "p90_tok": _percentile(out_tokens, 0.90),
                 "max_tok": out_tokens[-1] if out_tokens else 0,
-                "per_idx_pass": per_idx_pass,
+                "per_qid_pass": per_qid_pass,
+                "qid_index": qid_index,
             }
         )
     return results
@@ -174,7 +228,7 @@ def print_table(rows: List[dict]) -> None:
         return
     header = (
         f"{'目录':<28} {'数据集':<16} {'maxT':>5} {'temp':>4} "
-        f"{'总分':>11} {'截断(占比)':>13} {'截断对':>6} {'完成正确率':>13} "
+        f"{'总分':>11} {'截断(占比)':>13} {'截断对':>6} {'未知':>5} {'完成正确率':>13} "
         f"{'out_tok(avg/p90/max)':>21}"
     )
     print(header)
@@ -187,8 +241,38 @@ def print_table(rows: List[dict]) -> None:
         tok_s = f"{r['avg_tok']:.0f}/{r['p90_tok']}/{r['max_tok']}"
         print(
             f"{run_short:<28} {r['dataset']:<16} {str(r['max_tokens']):>5} {str(r['temperature']):>4} "
-            f"{score_s:>11} {trunc_s:>13} {r['trunc_pass']:>6} {done_s:>13} {tok_s:>21}"
+            f"{score_s:>11} {trunc_s:>13} {r['trunc_pass']:>6} {r['unknown']:>5} {done_s:>13} {tok_s:>21}"
         )
+
+
+def _disp(qid: str, qid_index: Dict[str, Optional[int]]) -> str:
+    """对照输出里的题目显示：有 index 就显示 index（和旧输出一致），
+    没有才显示稳定 ID 前 8 位。"""
+    idx = qid_index.get(qid)
+    return str(idx) if idx is not None else qid[:8]
+
+
+def _compare_pair(a: dict, b: dict) -> None:
+    print_table([a, b])
+    print()
+    pa, pb = a["per_qid_pass"], b["per_qid_pass"]
+    common = sorted(set(pa) & set(pb))
+    only_a = sorted(set(pa) - set(pb))
+    only_b = sorted(set(pb) - set(pa))
+    both_ok = sum(1 for i in common if pa[i] and pb[i])
+    a_only = [i for i in common if pa[i] and not pb[i]]
+    b_only = [i for i in common if not pa[i] and pb[i]]
+    both_fail = sum(1 for i in common if not pa[i] and not pb[i])
+    pval = _mcnemar_exact_p(len(a_only), len(b_only))
+    print(f"数据集 {a['dataset']}：逐题对照（共同 {len(common)} 题，"
+          f"仅 {Path(a['run_dir']).name} 有 {len(only_a)} 题，"
+          f"仅 {Path(b['run_dir']).name} 有 {len(only_b)} 题）：")
+    print(f"  同对：{both_ok} | 同错：{both_fail}")
+    print(f"  仅 {Path(a['run_dir']).name} 对：{len(a_only)} 题 "
+          f"{[_disp(i, a['qid_index']) for i in a_only]}")
+    print(f"  仅 {Path(b['run_dir']).name} 对：{len(b_only)} 题 "
+          f"{[_disp(i, b['qid_index']) for i in b_only]}")
+    print(f"  精确 McNemar 检验（双侧）：p = {pval:.4f}")
 
 
 def compare_runs(dir_a: Path, dir_b: Path) -> None:
@@ -197,20 +281,14 @@ def compare_runs(dir_a: Path, dir_b: Path) -> None:
     if not rows_a or not rows_b:
         print(f"[错误] 无法读取对照目录：{dir_a} / {dir_b}", file=sys.stderr)
         sys.exit(1)
-    a, b = rows_a[0], rows_b[0]
-    print_table([a, b])
-    print()
-    common = sorted(set(a["per_idx_pass"]) & set(b["per_idx_pass"]))
-    both_ok = sum(1 for i in common if a["per_idx_pass"][i] and b["per_idx_pass"][i])
-    a_only = [i for i in common if a["per_idx_pass"][i] and not b["per_idx_pass"][i]]
-    b_only = [i for i in common if not a["per_idx_pass"][i] and b["per_idx_pass"][i]]
-    both_fail = sum(1 for i in common if not a["per_idx_pass"][i] and not b["per_idx_pass"][i])
-    pval = _mcnemar_exact_p(len(a_only), len(b_only))
-    print(f"逐题对照（共同 {len(common)} 题）：")
-    print(f"  同对：{both_ok} | 同错：{both_fail}")
-    print(f"  仅 {Path(a['run_dir']).name} 对：{len(a_only)} 题 {a_only}")
-    print(f"  仅 {Path(b['run_dir']).name} 对：{len(b_only)} 题 {b_only}")
-    print(f"  精确 McNemar 检验（双侧）：p = {pval:.4f}")
+    # 按数据集名配对，不再只比每目录的第一行（一个轮次目录里常有三集）。
+    by_ds_b = {r["dataset"]: r for r in rows_b}
+    for a in rows_a:
+        b = by_ds_b.get(a["dataset"])
+        if b is None:
+            print(f"[跳过] 数据集 {a['dataset']} 只在 {dir_a} 出现，{dir_b} 里没有")
+            continue
+        _compare_pair(a, b)
 
 
 def main() -> None:
