@@ -68,7 +68,7 @@ bash download-model.sh --bf16   # 只要在 FP8 出问题、或要做精度对�
 ```
 
 预期输出：`[完成] 权重就绪：./models/Qwen3.8-27B-FP8`，并打印
-分片数（FP8 应为 7，BF16 应为 18）和总大小。ModelScope 下不动时脚本会
+分片数（FP8 应为 66，BF16 应为 18）和总大小。ModelScope 下不动时脚本会
 自动改走 HF（hf-mirror 镜像）；两个都失败时检查实例能不能上外网
 （AutoDL 实例一般可以直接访问 modelscope.cn）。
 
@@ -86,7 +86,7 @@ bash serve-qwen27b.sh
 
 | 参数 | 默认值 | 说明 |
 |---|---|---|
-| `MAX_MODEL_LEN` | 262144 | 模型原生上下文上限。比赛要 272000，见下 |
+| `MAX_MODEL_LEN` | 272000 | 比赛要求 272K（超原生 262144 自动开 YaRN 外推，见下） |
 | `KV_CACHE_DTYPE` | fp8 | KV 缓存用 FP8：262K 上下文只要约 8.6 GB（BF16 要 17.2 GB） |
 | `GPU_MEM_UTIL` | 0.90 | 显存占用比 |
 | `MAX_NUM_SEQS` | 32 | 最大并发序列数 |

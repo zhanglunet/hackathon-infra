@@ -45,7 +45,7 @@ else
 fi
 
 echo "--- 3/4 流式 chat completions（测 TTFT / TPOT）---"
-python3 - "$BASE_URL" "$MODEL" <<'PYEOF'
+if python3 - "$BASE_URL" "$MODEL" <<'PYEOF'
 import json, sys, time, urllib.request
 
 base, model = sys.argv[1], sys.argv[2]
@@ -78,14 +78,19 @@ try:
             except json.JSONDecodeError:
                 continue
             delta = chunk.get("choices", [{}])[0].get("delta", {})
-            content = delta.get("content")
-            if content:
+            # 开启 --reasoning-parser 时，思考模型先流式输出 reasoning_content/reasoning
+            token_text = (
+                delta.get("content")
+                or delta.get("reasoning_content")
+                or delta.get("reasoning")
+            )
+            if token_text:
                 now = time.time()
                 if t_first is None:
                     t_first = now
                 t_last = now
                 n_tokens += 1
-                text_parts.append(content)
+                text_parts.append(token_text)
 except Exception as e:
     print(f"[失败] 请求出错：{e}")
     sys.exit(1)
@@ -110,7 +115,11 @@ if ok:
     print("[通过] 流式生成正常，TTFT/TPOT 在短提问门槛内")
 sys.exit(0 if ok else 1)
 PYEOF
-if [ $? -eq 0 ]; then PASS=$((PASS+1)); else FAIL=$((FAIL+1)); fi
+then
+    PASS=$((PASS+1))
+else
+    FAIL=$((FAIL+1))
+fi
 
 echo "--- 4/4 /metrics ---"
 METRICS="$(curl -sf -m 10 "$BASE_URL/metrics" || true)"

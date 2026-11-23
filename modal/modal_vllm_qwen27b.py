@@ -79,6 +79,13 @@ USE_CUDA_IMAGE = os.environ.get("USE_CUDA_IMAGE", "0")  # "0" | "1"
 # 控制采集，trace 用 `modal volume get` 取回本地分析。
 PROFILER_CONFIG = os.environ.get("PROFILER_CONFIG", "")
 
+# 工具调用与思考输出解析器（核对自 vLLM 官方 Qwen3.8-27B recipe）：
+# 设为空字符串 "" 可显式关闭对应参数。
+TOOL_CALL_PARSER = os.environ.get("TOOL_CALL_PARSER", "qwen3_coder")
+REASONING_PARSER = os.environ.get("REASONING_PARSER", "qwen3")
+# Modal 单容器最大并发请求数（比赛阶梯最高 80，默认放宽到 128，避免压测被 Modal 限流）。
+MODAL_MAX_INPUTS = int(os.environ.get("MODAL_MAX_INPUTS", "128"))
+
 MODELS = {
     # (HF 仓库, 本地目录名, 预期分片数, 分片匹配模式)
     # 注意 FP8 版的分片不叫 model-*.safetensors，而是按层拆的
@@ -105,6 +112,9 @@ _CONTAINER_ENV = {
     "GDN_PREFILL_BACKEND": GDN_PREFILL_BACKEND,
     "ATTENTION_BACKEND": ATTENTION_BACKEND,
     "PROFILER_CONFIG": PROFILER_CONFIG,
+    "TOOL_CALL_PARSER": TOOL_CALL_PARSER,
+    "REASONING_PARSER": REASONING_PARSER,
+    "MODAL_MAX_INPUTS": str(MODAL_MAX_INPUTS),
     # vLLM 0.34.0 会先校验 max_model_len ≤ config 的 max_position_embeddings，
     # 再应用 --hf-overrides；超原生上限必须另设此变量才放行（2026-11-21
     # 实测：不设它时 vLLM 直接报 ValueError，容器循环重启）。
@@ -205,7 +215,7 @@ def check_nvcc():
     # 请求被串行化。用 @modal.concurrent 放开并发（allow_concurrent_inputs
     # 参数在 modal 1.6 已废弃、会直接报 DeprecationError）。
 )
-@modal.concurrent(max_inputs=16)
+@modal.concurrent(max_inputs=MODAL_MAX_INPUTS)
 @modal.web_server(port=8000, startup_timeout=600)
 def serve():
     """起 vLLM OpenAI 兼容服务：/v1/chat/completions + /metrics，端口 8000。
@@ -235,6 +245,10 @@ def serve():
         cmd += ["--gdn-prefill-backend", GDN_PREFILL_BACKEND]
     if ATTENTION_BACKEND:
         cmd += ["--attention-backend", ATTENTION_BACKEND]
+    if TOOL_CALL_PARSER:
+        cmd += ["--enable-auto-tool-choice", "--tool-call-parser", TOOL_CALL_PARSER]
+    if REASONING_PARSER:
+        cmd += ["--reasoning-parser", REASONING_PARSER]
     if PROFILER_CONFIG:
         cmd += ["--profiler-config", PROFILER_CONFIG]
     if MAX_MODEL_LEN > NATIVE_LEN:
@@ -322,14 +336,19 @@ def smoke(url: str):
                     chunk = json.loads(data)
                 except json.JSONDecodeError:
                     continue
-                content = chunk.get("choices", [{}])[0].get("delta", {}).get("content")
-                if content:
+                delta = chunk.get("choices", [{}])[0].get("delta", {})
+                token_text = (
+                    delta.get("content")
+                    or delta.get("reasoning_content")
+                    or delta.get("reasoning")
+                )
+                if token_text:
                     now = time.time()
                     if t_first is None:
                         t_first = now
                     t_last = now
                     n_tokens += 1
-                    text_parts.append(content)
+                    text_parts.append(token_text)
         if t_first is None:
             bad("没收到任何 token，服务可能没正常生成。")
         else:

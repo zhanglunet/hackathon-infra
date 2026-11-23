@@ -20,10 +20,9 @@
 | 项目 | 值 | 来源 |
 |---|---|---|
 | 推理引擎 | vLLM 0.34.0 | `modal/modal_vllm_qwen27b.py`（`VLLM_VERSION`） |
-| torch | 2.14.0+cu130（CUDA 13.0） | 第 6 轮 devlog（容器内实测） |
+| torch | 2.14.0+cu130（CUDA 13.0 运行时） | 第 6 轮 `check_nvcc` 实测（`pip install vllm==0.34.0` 实际拉取 `cu130`，非 12.8） |
 | Python | 3.12 | Modal 镜像 `debian_slim(python_version="3.12")` / CUDA devel 镜像 `add_python="3.12"` |
-| CUDA（pip 轮子） | 12.8 | vLLM 0.34.0 pip 轮子 |
-| nvcc | 12.8.61（CUDA 12.8 devel 镜像） | 第 6 轮 `check_nvcc` 实测；注意 torch 是 cu130，版本错位但 FlashInfer JIT 仍通 |
+| nvcc | 12.8.61（CUDA 12.8 devel 镜像） | 第 6 轮 `check_nvcc` 实测；与 torch `cu130` 版本错位，Hopper 上 FlashInfer JIT 仍通但 DeepGEMM 被禁；**Blackwell 上须验证并优先对齐 CUDA 13.0 toolkit** |
 | 排练硬件 | Modal H100 80GB / H200 141GB | 第 1–8 轮 devlog |
 | 比赛硬件 | 4 台 × 8×RTX 6000D-Blackwell-84G | 规则 §一；**TBD**：真机上全部重测 |
 | 服务接口 | `/v1/chat/completions` + `/metrics`，端口 8000 | `modal_vllm_qwen27b.py` / `serve-qwen27b.sh` |
