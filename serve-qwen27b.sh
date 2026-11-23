@@ -14,6 +14,34 @@
 #   KV_CACHE_DTYPE KV 缓存精度，默认 fp8
 #   GPU_MEM_UTIL   显存占用比，默认 0.90
 #   MAX_NUM_SEQS   最大并发序列数，默认 32
+#   MAX_NUM_BATCHED_TOKENS  chunked prefill 步长，默认 65536（已验证，见下）
+#   ATTENTION_BACKEND  全注意力后端，默认 FLASHINFER（已验证最快，见下）；
+#     设为空字符串则不传该参数、走 vLLM 默认（FA3）
+#   GDN_PREFILL_BACKEND  GDN prefill 后端，默认不传（auto）；可设 triton 等
+#   COMPILATION_MODE  编译模式，默认不传；设 3 = VLLM_COMPILE（本模型上是空转，见下）
+#   VLLM_USE_BREAKABLE_CUDAGRAPH  默认 0（退出自动开 breakable 图的路径，见下）
+#
+# ── 已验证的调优项（2026-11-21～11-23，Modal H100/H200，见 devlog）───
+# 以下默认值照抄 modal/modal_vllm_qwen27b.py 里的已验证值，不要自己改数字；
+# 每项括号里是来源。注意：这些值是在 Modal 上验证的，裸机/Blackwell 上
+# 仍须重测，见各条“待真机验证”。
+#   VLLM_ALLOW_LONG_MAX_MODEL_LEN=1：MAX_MODEL_LEN=272000 时 vLLM 0.34.0
+#     会先校验 max_model_len ≤ max_position_embeddings，不设它直接报
+#     ValueError——2026-11-21 Modal 首次部署因此循环重启约 11 分钟。
+#     （待真机验证：裸机 vllm serve 同样走这段校验，逻辑相同，但未实跑。）
+#   --max-num-batched-tokens 65536：271,500 token 的提示只切 2 片；
+#     8192→65536 只快 1.5%（50.92 秒 vs 51.72 秒），分片不是瓶颈；
+#     262144 初始化失败。副作用：KV 容量 2,955,530→2,592,357 token。
+#   --attention-backend FLASHINFER：第 6 轮最快，冷 41.09/43.8 秒，
+#     比 FA3（52.52/54.94 秒）快约 21%。前提：flashinfer + nvcc 已装
+#     （setup-vllm.sh 第 6 步）；没装时引擎在 warmup JIT 编译处报错，
+#     像第 5 轮那样起不来——此时设 ATTENTION_BACKEND="" 回落 FA3。
+#   VLLM_USE_BREAKABLE_CUDAGRAPH=0：第 4 轮核实，vLLM 对 Qwen3.5 架构
+#     默认自动开 breakable cudagraph，会把 compilation mode 置回 NONE；
+#     设 0 退出该路径。但 mode=3 本身对本模型也是空转（不支持
+#     torch.compile），所以 COMPILATION_MODE 默认不传。
+#   --gdn-prefill-backend：默认不传（auto）。GDN 全部内核仅约 1.4 秒
+#     （冷请求 GPU 时间的 3%），triton 轮 53.04 秒无改善，不是瓶颈。
 #
 # ── 上下文长度的关键说明 ──────────────────────────────────────────
 # Qwen3.8-27B 原生上下文是 262144 token（config.json 的 max_position_embeddings）。
@@ -38,10 +66,13 @@
 # AutoDL 实例通常只有你能访问；如实例有公网 IP 且不想公开，
 # 请把 HOST 改成 127.0.0.1，或在 AutoDL 控制台只映射你自己的端口。
 #
-# 标志核对（vLLM 0.34.0 官方 CLI 参考 docs.vllm.ai，2026-11-20 核对）：
+# 标志核对（vLLM 0.34.0 官方 CLI 参考 docs.vllm.ai，2026-11-20 核对；
+#   新增 4 项 2026-11-23 按 modal_vllm_qwen27b.py 已验证值补）：
 #   --host/--port/--served-model-name/--tensor-parallel-size/--max-model-len/
 #   --quantization/--kv-cache-dtype/--gpu-memory-utilization/
-#   --enable-prefix-caching/--enable-per-request-metrics/--max-num-seqs 均存在。
+#   --enable-prefix-caching/--enable-per-request-metrics/--max-num-seqs/
+#   --max-num-batched-tokens/--attention-backend/--gdn-prefill-backend/
+#   --compilation-config 均存在。
 #   注意：vLLM 0.34 没有 --enable-metrics 这个参数——/metrics 端口默认就开，
 #   不用加参数；--enable-per-request-metrics 是把每请求的耗时写进响应里。
 
@@ -58,6 +89,18 @@ KV_CACHE_DTYPE="${KV_CACHE_DTYPE:-fp8}"
 GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
 MAX_NUM_SEQS="${MAX_NUM_SEQS:-32}"
 TP_SIZE="${TP_SIZE:-1}"
+# 已验证的调优项（2026-11-23 补，默认值照抄 modal 已验证值，见文件头说明）：
+MAX_NUM_BATCHED_TOKENS="${MAX_NUM_BATCHED_TOKENS:-65536}"
+ATTENTION_BACKEND="${ATTENTION_BACKEND:-FLASHINFER}"
+GDN_PREFILL_BACKEND="${GDN_PREFILL_BACKEND:-}"
+COMPILATION_MODE="${COMPILATION_MODE:-}"
+# vLLM 0.34.0 校验 max_model_len ≤ max_position_embeddings：272000 超原生
+# 262144 时必须设此变量放行，否则直接报 ValueError（2026-11-21 Modal
+# 首次部署因此循环重启约 11 分钟；modal_vllm_qwen27b.py _CONTAINER_ENV 同款）。
+export VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
+# vLLM 对 Qwen3.5 架构默认自动开 breakable cudagraph，会把 compilation
+# mode 置回 NONE（第 4 轮源码定位）；设 0 退出该路径。默认 0。
+export VLLM_USE_BREAKABLE_CUDAGRAPH="${VLLM_USE_BREAKABLE_CUDAGRAPH:-0}"
 NATIVE_LEN=262144
 
 echo "== 预检 =="
@@ -111,6 +154,27 @@ if [ "$MAX_MODEL_LEN" -gt "$NATIVE_LEN" ]; then
     ROPE_ARGS=(--hf-overrides "{\"rope_parameters\": {\"rope_type\": \"yarn\", \"factor\": $YARN_FACTOR, \"original_max_position_embeddings\": $NATIVE_LEN, \"rope_theta\": 10000000, \"partial_rotary_factor\": 0.25, \"mrope_section\": [11, 11, 10], \"mrope_interleaved\": true}}")
 fi
 
+# 已验证的调优 flag（2026-11-23 补，默认值照抄 modal 已验证值）：
+# ATTENTION_BACKEND 为空时不传参数（走 vLLM 默认 FA3）；非空时传
+# --attention-backend。FLASHINFER 须 flashinfer + nvcc 已装，否则引擎在
+# warmup JIT 编译处报错（第 5 轮教训）——此时设 ATTENTION_BACKEND="" 回落。
+ATTN_ARGS=()
+if [ -n "$ATTENTION_BACKEND" ]; then
+    ATTN_ARGS=(--attention-backend "$ATTENTION_BACKEND")
+fi
+# GDN prefill 后端：默认不传（auto）；显式指定时才传。
+GDN_ARGS=()
+if [ -n "$GDN_PREFILL_BACKEND" ]; then
+    GDN_ARGS=(--gdn-prefill-backend "$GDN_PREFILL_BACKEND")
+fi
+# 编译模式：默认不传。设了才传 --compilation-config '{"mode": N}'。
+# 注意：第 4 轮已核实 mode=3 对本模型是空转（不支持 torch.compile），
+# 传了也不提速；留这个开关只为以后换模型时复用。
+COMP_ARGS=()
+if [ -n "$COMPILATION_MODE" ]; then
+    COMP_ARGS=(--compilation-config "{\"mode\": $COMPILATION_MODE}")
+fi
+
 mkdir -p logs
 LOG_FILE="logs/vllm-serve-$(date +%Y%m%d-%H%M%S).log"
 echo "== 启动 vLLM（日志同时写到 $LOG_FILE）=="
@@ -129,6 +193,10 @@ vllm serve "$MODEL_PATH" \
     --kv-cache-dtype "$KV_CACHE_DTYPE" \
     --gpu-memory-utilization "$GPU_MEM_UTIL" \
     --max-num-seqs "$MAX_NUM_SEQS" \
+    --max-num-batched-tokens "$MAX_NUM_BATCHED_TOKENS" \
+    "${ATTN_ARGS[@]}" \
+    "${GDN_ARGS[@]}" \
+    "${COMP_ARGS[@]}" \
     --enable-prefix-caching \
     --enable-per-request-metrics \
     "${ROPE_ARGS[@]}" \
@@ -141,5 +209,8 @@ vllm serve "$MODEL_PATH" \
 #   MODEL_NAME=Qwen3.8-27B MAX_MODEL_LEN=131072 KV_CACHE_DTYPE=fp8 bash serve-qwen27b.sh
 # 调试用 eager 模式（慢，但能绕过 CUDA 图相关报错）：
 #   在上面命令后追加 --enforce-eager
+# FlashInfer 起不来时（warmup 报找不到 nvcc）：先确认 setup-vllm.sh 第 6 步
+# 已装 flashinfer + nvcc；应急可回落 FA3（第 5 轮默认后端，冷 52.52 秒）：
+#   ATTENTION_BACKEND= bash serve-qwen27b.sh
 # 只看文本、不加载视觉塔（比赛只测文本时可省一点显存）：
 #   追加 --language-model-only
