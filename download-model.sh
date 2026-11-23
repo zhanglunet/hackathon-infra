@@ -12,9 +12,11 @@
 #   3. 失败则回退到 Hugging Face（走 hf-mirror.com 国内镜像）
 #   4. 校验：config.json 存在、分片数量对得上、总大小在预期范围内
 #
-# 权重说明（2026-11-20 实测）：
-#   - 官方 FP8 版 Qwen/Qwen3.8-27B-FP8：约 30.9 GB，7 个 safetensors 分片，
-#     config.json 里 quant_method=fp8、fmt=e4m3、block-128 细粒度量化，
+# 权重说明（2026-11-20 实测，2026-11-21/23 HF API 与源码复核）：
+#   - 官方 FP8 版 Qwen/Qwen3.8-27B-FP8：约 30.9 GB，66 个 safetensors 分片
+#     （按层拆分为 layers-0~63 + mtp + outside，非 model-*.safetensors），
+#     config.json 里 quant_method=fp8、fmt=e4m3、per-tensor 权重量化、
+#     activation_scheme=dynamic（无 weight_block_size），
 #     官方称精度与 BF16 原版“几乎相同”。比赛精度门是相对官方权重损失 ≤2%，
 #     用官方 FP8 权重本身不算“再量化”，自测时仍要跑 EvalScope 对照。
 #   - BF16 原版 Qwen/Qwen3.8-27B：约 51.7 GiB（约 55.5 GB），18 个分片。
@@ -32,13 +34,15 @@ if [ "$QUANT" = "fp8" ]; then
     MODEL_ID="Qwen/Qwen3.8-27B-FP8"
     LOCAL_NAME="Qwen3.8-27B-FP8"
     EXPECTED_GB=31        # 官方 FP8 权重约 30.9 GB
-    EXPECTED_SHARDS=7
+    EXPECTED_SHARDS=66
+    SHARD_GLOB="*.safetensors"
     NEED_FREE_GB=45       # 下载中需要一点余量
 else
     MODEL_ID="Qwen/Qwen3.8-27B"
     LOCAL_NAME="Qwen3.8-27B"
     EXPECTED_GB=56        # BF16 约 51.7 GiB ≈ 55.5 GB
     EXPECTED_SHARDS=18
+    SHARD_GLOB="model-*.safetensors"
     NEED_FREE_GB=75
 fi
 TARGET_DIR="$MODEL_DIR/$LOCAL_NAME"
@@ -85,8 +89,8 @@ for f in config.json model.safetensors.index.json tokenizer.json; do
         FAIL=1
     fi
 done
-SHARD_COUNT="$(ls "$TARGET_DIR"/model-*.safetensors 2>/dev/null | wc -l)"
-echo "分片数量：$SHARD_COUNT（预期 $EXPECTED_SHARDS）"
+SHARD_COUNT="$(find "$TARGET_DIR" -maxdepth 1 -name "$SHARD_GLOB" | wc -l)"
+echo "分片数量：$SHARD_COUNT（预期 $EXPECTED_SHARDS，按 $SHARD_GLOB 计数）"
 if [ "$SHARD_COUNT" -ne "$EXPECTED_SHARDS" ]; then
     echo "[错误] 分片数量不对，下载可能不完整。请删掉 $TARGET_DIR 后重新下载。"
     FAIL=1

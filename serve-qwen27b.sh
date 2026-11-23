@@ -10,7 +10,7 @@
 #   MODEL_NAME     子目录名，默认 Qwen3.8-27B-FP8（改 BF16 时改为 Qwen3.8-27B）
 #   PORT           默认 8000；HOST 默认 0.0.0.0（局域网/公网可访问，见安全提示）
 #   SERVED_NAME    API 里显示的模型名，默认 qwen3.8-27b
-#   MAX_MODEL_LEN  上下文上限，默认 262144（= 模型原生上限，见下）
+#   MAX_MODEL_LEN  上下文上限，默认 272000（比赛要求 272K，超原生 262144 自动开 YaRN）
 #   KV_CACHE_DTYPE KV 缓存精度，默认 fp8
 #   GPU_MEM_UTIL   显存占用比，默认 0.90
 #   MAX_NUM_SEQS   最大并发序列数，默认 32
@@ -19,6 +19,8 @@
 #     设为空字符串则不传该参数、走 vLLM 默认（FA3）
 #   GDN_PREFILL_BACKEND  GDN prefill 后端，默认不传（auto）；可设 triton 等
 #   COMPILATION_MODE  编译模式，默认不传；设 3 = VLLM_COMPILE（本模型上是空转，见下）
+#   TOOL_CALL_PARSER  工具调用解析器，默认 qwen3_coder（同时开 --enable-auto-tool-choice）；设为空字符串则关闭
+#   REASONING_PARSER  思考输出解析器，默认 qwen3（拆分 reasoning_content/reasoning）；设为空字符串则关闭
 #   VLLM_USE_BREAKABLE_CUDAGRAPH  默认 0（退出自动开 breakable 图的路径，见下）
 #
 # ── 已验证的调优项（2026-11-21～11-23，Modal H100/H200，见 devlog）───
@@ -84,16 +86,21 @@ MODEL_PATH="$MODEL_DIR/$MODEL_NAME"
 HOST="${HOST:-0.0.0.0}"
 PORT="${PORT:-8000}"
 SERVED_NAME="${SERVED_NAME:-qwen3.8-27b}"
-MAX_MODEL_LEN="${MAX_MODEL_LEN:-262144}"
+MAX_MODEL_LEN="${MAX_MODEL_LEN:-272000}"
 KV_CACHE_DTYPE="${KV_CACHE_DTYPE:-fp8}"
 GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
 MAX_NUM_SEQS="${MAX_NUM_SEQS:-32}"
 TP_SIZE="${TP_SIZE:-1}"
 # 已验证的调优项（2026-11-23 补，默认值照抄 modal 已验证值，见文件头说明）：
 MAX_NUM_BATCHED_TOKENS="${MAX_NUM_BATCHED_TOKENS:-65536}"
-ATTENTION_BACKEND="${ATTENTION_BACKEND:-FLASHINFER}"
+# 注意用 - 而非 :-：传 ATTENTION_BACKEND="" 时保留空值，不传 --attention-backend、回落 FA3。
+ATTENTION_BACKEND="${ATTENTION_BACKEND-FLASHINFER}"
 GDN_PREFILL_BACKEND="${GDN_PREFILL_BACKEND:-}"
 COMPILATION_MODE="${COMPILATION_MODE:-}"
+# 工具调用与思考输出解析器（核对自 vLLM 官方 Qwen3.8-27B recipe）：
+# 用 - 而非 :-，传空字符串可显式关闭对应参数。
+TOOL_CALL_PARSER="${TOOL_CALL_PARSER-qwen3_coder}"
+REASONING_PARSER="${REASONING_PARSER-qwen3}"
 # vLLM 0.34.0 校验 max_model_len ≤ max_position_embeddings：272000 超原生
 # 262144 时必须设此变量放行，否则直接报 ValueError（2026-11-21 Modal
 # 首次部署因此循环重启约 11 分钟；modal_vllm_qwen27b.py _CONTAINER_ENV 同款）。
@@ -175,6 +182,16 @@ if [ -n "$COMPILATION_MODE" ]; then
     COMP_ARGS=(--compilation-config "{\"mode\": $COMPILATION_MODE}")
 fi
 
+# 工具调用与思考输出解析器（默认 qwen3_coder + qwen3，传空字符串可关闭）：
+TOOL_ARGS=()
+if [ -n "$TOOL_CALL_PARSER" ]; then
+    TOOL_ARGS=(--enable-auto-tool-choice --tool-call-parser "$TOOL_CALL_PARSER")
+fi
+REASONING_ARGS=()
+if [ -n "$REASONING_PARSER" ]; then
+    REASONING_ARGS=(--reasoning-parser "$REASONING_PARSER")
+fi
+
 mkdir -p logs
 LOG_FILE="logs/vllm-serve-$(date +%Y%m%d-%H%M%S).log"
 echo "== 启动 vLLM（日志同时写到 $LOG_FILE）=="
@@ -197,6 +214,8 @@ vllm serve "$MODEL_PATH" \
     "${ATTN_ARGS[@]}" \
     "${GDN_ARGS[@]}" \
     "${COMP_ARGS[@]}" \
+    "${TOOL_ARGS[@]}" \
+    "${REASONING_ARGS[@]}" \
     --enable-prefix-caching \
     --enable-per-request-metrics \
     "${ROPE_ARGS[@]}" \

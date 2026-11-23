@@ -10,7 +10,7 @@
 | 评测 | 官方题数 | 公开数据集 | HuggingFace ID（2026-11-20 核对存在） |
 |---|---|---|---|
 | AIME 2025（数学） | 30 | AIME 2025 全集 30 题 | `MathArena/aime_2025` |
-| GPQA（知识问答） | 50 | GPQA 主集 448 题 | `Idavidrein/gpqa`（取 `gpqa_main.csv`） |
+| GPQA Diamond（知识问答） | 50 | GPQA Diamond 198 题（自测抽前 50 题） | `Idavidrein/gpqa`（本地数据 `eval/data/gpqa_diamond.jsonl`） |
 | LiveCodeBench Lite（编程） | 40 | Lite 六个版本 `test.jsonl`~`test6.jsonl` | `livecodebench/code_generation_lite` |
 | BFCL v3（工具调用） | 50 | BFCL v3 25 个分类 JSON | `gorilla-llm/Berkeley-Function-Calling-Leaderboard`（取 `BFCL_v3_*.json`） |
 

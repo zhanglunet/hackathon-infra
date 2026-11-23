@@ -6,16 +6,17 @@
 #   VLLM_VERSION=0.34.0 bash setup-vllm.sh
 #
 # 做什么：
-#   1. 检查 GPU（nvidia-smi）、Python 版本、磁盘空间
-#   2. 创建 Python 虚拟环境 .venv
-#   3. 安装 vLLM（已验证版本，见下方）+ modelscope + huggingface_hub
-#   4. 安装 flashinfer 与 CUDA toolkit（nvcc，FlashInfer 后端 JIT 编译要用）
-#   5. 校验 vllm 可正常 import、flashinfer 可用、nvcc 可用
+#   1. 检查 GPU（nvidia-smi）
+#   2. 检查 Python 版本（>= 3.11）
+#   3. 检查磁盘空间
+#   4. 创建 Python 虚拟环境 .venv，安装 vLLM + modelscope + huggingface_hub
+#   5. 安装 flashinfer 与 CUDA toolkit（nvcc，FlashInfer 后端 JIT 编译要用）
+#   6. 校验 vllm 可正常 import、flashinfer 可用、nvcc 可用
 #
 # 注意：
 #   - vLLM 0.34.0 会把 torch 换成它要求的版本（torch 2.14.0），
 #     首次安装要下载约 3 GB，请耐心等待，不要中途 Ctrl-C。
-#   - 第 4 步装 flashinfer + nvcc：第 6 轮验证 FlashInfer 是最快后端
+#   - 第 5 步装 flashinfer + nvcc：第 6 轮验证 FlashInfer 是最快后端
 #     （冷 41.09 秒），但它的 batch-prefill 内核要在 warmup 时 JIT 编译，
 #     没 nvcc 引擎起不来（第 5 轮教训；Modal 是用 CUDA devel 基础镜像
 #     解决的）。nvcc 没装上也不报错——FA3 后端不用 nvcc，serve 时设
@@ -126,7 +127,7 @@ if command -v nvcc >/dev/null 2>&1; then
 else
     echo "[提示] nvcc 不可用：FlashInfer 后端暂不可用，FA3 可用（serve 时设 ATTENTION_BACKEND=\"\"）。"
 fi
-hf --version
+hf --version || echo "[警告] hf 命令不可用（不影响 vLLM 运行，ModelScope 仍可下载权重）。"
 
 echo
 echo "[完成] 环境已就绪。接下来运行："
