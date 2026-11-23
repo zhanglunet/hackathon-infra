@@ -41,14 +41,15 @@
 | KV 缓存总容量（H200） | 2,955,530 token（步长 8192 时）；步长 65536 时 2,592,357 token | 第 2 轮 / 第 4 轮实测；单请求 272K 约占 9–10% |
 | 最大并发序列数 | 32（`--max-num-seqs 32`） | Modal 配置 |
 
-### 3.2 DeepSeek-V4.1-Flash-1017（必选，全部 TBD）
+### 3.2 DeepSeek-V4.1-Flash-1017（必选，脚本骨架已按官方 recipe 就绪，待真机验证）
 
 | 项目 | 值 | 状态 |
 |---|---|---|
-| 权重 | 510GB，552B MoE，8B/16B 激活，1M 上下文，KV 890 字节/token | 规则 §二（未上机核实） |
-| 并行切分 | **TBD**：8 卡 TP 方案、是否开专家并行（`--enable-expert-parallel`）、是否 PD 分离 | 待真机验证 |
-| 上下文 | 272000（计划，YaRN/原生支持待核实） | 待真机验证 |
-| 启动脚本 | 无（`download-model.sh` 只认 Qwen） | 待写 |
+| 权重 | `deepseek-ai/DeepSeek-V4.1-Flash-1017`：约 511 GB（476 GiB），48 分片；552B MoE 骨干 + 196B Engram（183.1 GiB）+ ~14B DSpark 草稿头；8B prefill / 16B decode 激活；1M 原生上下文；全局 KV 890 字节/token | 2026-11-23 核对自 vLLM 官方 recipe（待真机核实） |
+| 必选参数 | `--tokenizer-mode deepseek_v41`（仓库无 Jinja template）、`--enable-auto-tool-choice --tool-call-parser deepseek_v41 --reasoning-parser deepseek_v41`（V4.1 带空格 DSML 标签）、`VLLM_ENGINE_READY_TIMEOUT_S=3600` | 已写入 `serve-deepseek.sh`（待真机验证） |
+| 并行切分与 Engram | 默认 8 卡 TP + `--engram-config '{"cpu_offload":true}'`（显存驻留 ~36.6 GiB/卡）；支持切换 `ENGRAM_CPU_OFFLOAD=false`、DEP（`TP_SIZE=1 DP_SIZE=8 ENABLE_EP=1`）、`--language-model-only`、DSpark 推测解码（V4.1 已弃用 MTP） | **TBD**：待真机验证与选优 |
+| 上下文 | 272000（原生 1M 上下文，无需 YaRN） | 待真机验证 |
+| 脚本与镜像 | `download-deepseek.sh`、`serve-deepseek.sh`、`Dockerfile`（CUDA 13.0 devel 草稿） | 已入库，待真机构建与实跑 |
 
 ### 3.3 第二款模型（TBD）
 
