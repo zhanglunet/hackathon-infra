@@ -96,7 +96,7 @@ cleanup() {
         local elapsed=$((t_end - T_DEPLOY_START))
         local rate="3.95"
         if [[ "$MODAL_GPU" == H200* ]]; then rate="4.54"; fi
-        python3 -c "print(f'Modal 墙钟：{${elapsed}/60:.1f} 分钟（按 ${MODAL_GPU} \${rate}/h 估算约 \${${elapsed}/3600*${rate}:.2f}）')"
+        python3 -c "print(f'Modal 墙钟：{${elapsed}/60:.1f} 分钟（按 ${MODAL_GPU} ${rate}/h 估算约 \${${elapsed}/3600*${rate}:.2f}）')"
         local code
         code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 15 "$MODAL_APP_URL/health" || echo 000)"
         echo "停机复核 /health HTTP 状态码：$code（预期 404）"
