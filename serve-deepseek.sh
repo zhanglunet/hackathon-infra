@@ -74,6 +74,11 @@ export VLLM_ENGINE_READY_TIMEOUT_S="${VLLM_ENGINE_READY_TIMEOUT_S:-3600}"
 if [ "${VLLM_USE_RUST_FRONTEND:-0}" = "1" ]; then
     export VLLM_USE_RUST_FRONTEND=1
 fi
+# 预热与调优缓存（响应 #1 调研：RTX 6000D SM120 需自调 Triton MoE 配置表 + 持久化 FlashInfer 缓存）
+[ -n "${VLLM_CACHE_ROOT:-}" ] && export VLLM_CACHE_ROOT
+[ -n "${VLLM_TUNED_CONFIG_FOLDER:-}" ] && export VLLM_TUNED_CONFIG_FOLDER
+[ -n "${VLLM_FLASHINFER_AUTOTUNE_CACHE_DIR:-}" ] && export VLLM_FLASHINFER_AUTOTUNE_CACHE_DIR
+[ -n "${VLLM_DEEP_GEMM_WARMUP:-}" ] && export VLLM_DEEP_GEMM_WARMUP
 
 echo "== DeepSeek-V4.1-Flash 预检 =="
 if [ ! -f "$MODEL_PATH/config.json" ]; then
@@ -143,6 +148,7 @@ vllm serve "$MODEL_PATH" \
     --gpu-memory-utilization "$GPU_MEM_UTIL" \
     --max-num-seqs "$MAX_NUM_SEQS" \
     --enable-prefix-caching \
+    --enable-prompt-tokens-details \
     --enable-per-request-metrics \
     "${EXTRA_ARGS[@]}" \
     2>&1 | tee "$LOG_FILE"
