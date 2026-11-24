@@ -32,7 +32,12 @@ ARG PIP_INDEX_URL=""
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    MODEL_DIR=/models
+    MODEL_DIR=/models \
+    VLLM_CACHE_ROOT=/cache/vllm \
+    VLLM_FLASHINFER_AUTOTUNE_CACHE_DIR=/cache/vllm/flashinfer_autotune_cache \
+    VLLM_TUNED_CONFIG_FOLDER=/cache/vllm/tuned_configs
+
+RUN mkdir -p /cache/vllm/flashinfer_autotune_cache /cache/vllm/tuned_configs
 
 # Ubuntu 24.04 自带 Python 3.12
 RUN apt-get update && apt-get install -y --no-install-recommends \

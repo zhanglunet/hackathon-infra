@@ -110,6 +110,11 @@ export VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
 # vLLM 对 Qwen3.5 架构默认自动开 breakable cudagraph，会把 compilation
 # mode 置回 NONE（第 4 轮源码定位）；设 0 退出该路径。默认 0。
 export VLLM_USE_BREAKABLE_CUDAGRAPH="${VLLM_USE_BREAKABLE_CUDAGRAPH:-0}"
+# 预热与调优缓存（响应 #1 调研：支持把 FlashInfer/Triton 缓存持久化挂载进容器或目录）
+[ -n "${VLLM_CACHE_ROOT:-}" ] && export VLLM_CACHE_ROOT
+[ -n "${VLLM_TUNED_CONFIG_FOLDER:-}" ] && export VLLM_TUNED_CONFIG_FOLDER
+[ -n "${VLLM_FLASHINFER_AUTOTUNE_CACHE_DIR:-}" ] && export VLLM_FLASHINFER_AUTOTUNE_CACHE_DIR
+[ -n "${VLLM_DEEP_GEMM_WARMUP:-}" ] && export VLLM_DEEP_GEMM_WARMUP
 NATIVE_LEN=262144
 
 echo "== 预检 =="
@@ -224,6 +229,7 @@ vllm serve "$MODEL_PATH" \
     "${TOOL_ARGS[@]}" \
     "${REASONING_ARGS[@]}" \
     --enable-prefix-caching \
+    --enable-prompt-tokens-details \
     --enable-per-request-metrics \
     "${ROPE_ARGS[@]}" \
     2>&1 | tee "$LOG_FILE"

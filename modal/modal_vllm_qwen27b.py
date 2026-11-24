@@ -234,6 +234,7 @@ def serve():
         "--max-num-seqs", str(MAX_NUM_SEQS),
         "--max-num-batched-tokens", str(MAX_NUM_BATCHED_TOKENS),
         "--enable-prefix-caching",
+        "--enable-prompt-tokens-details",
         "--enable-per-request-metrics",
     ]
     if QUANT == "fp8":
