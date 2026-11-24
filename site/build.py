@@ -47,7 +47,8 @@ ul.reports .meta{margin-left:8px}
 """
 
 NAV = ('<nav><a href="/">首页</a><a href="/evaluation/">评测标准</a>'
-       '<a href="/guide/">部署指南</a><a href="/eval/">精度自测</a>'
+       '<a href="/guide/">部署指南</a><a href="/env/">环境与优化表</a>'
+       '<a href="/eval/">精度自测</a><a href="/loadtest/">性能压测</a>'
        '<a href="/#reports">报告</a></nav>')
 
 FOOTER = ('<footer>AI 赋能小队 · AI Infra 推理性能打榜（2026-11-27）'
@@ -103,7 +104,9 @@ def main() -> None:
     docs = [
         ("evaluation", ROOT / "EVALUATION.md", "评测标准与要求"),
         ("guide", ROOT / "README.md", "部署指南"),
+        ("env", ROOT / "ENVIRONMENT.md", "环境与优化说明表"),
         ("eval", ROOT / "eval" / "README.md", "精度自测：测试集说明"),
+        ("loadtest", ROOT / "loadtest" / "README.md", "四档 SLO 性能压测指南"),
     ]
     for slug, src, title in docs:
         d = DIST / slug
@@ -138,8 +141,10 @@ def main() -> None:
 <h2>文档</h2>
 <ul>
 <li><a href="/evaluation/">评测标准与要求</a>：模型、190 题精度门槛、SLO、并发阶梯、提交物</li>
-<li><a href="/guide/">部署指南</a>：租卡、装环境、下权重、起服务、冒烟测试</li>
+<li><a href="/guide/">部署指南</a>：装环境、三模型下权重与启动脚本、Dockerfile、冒烟测试</li>
+<li><a href="/env/">环境与优化说明表</a>：三模型配置、已验证优化项与真机 TBD 清单</li>
 <li><a href="/eval/">精度自测：测试集说明</a>：官方 190 题构成与公开数据集自测办法</li>
+<li><a href="/loadtest/">四档 SLO 性能压测指南</a>：AIPerf / 内置引擎阶梯压测、摸高与 Goodput 报告</li>
 </ul>
 <h2 id="reports">报告</h2>
 <ul class="reports">{items}</ul>
