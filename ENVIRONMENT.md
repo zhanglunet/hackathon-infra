@@ -11,9 +11,9 @@
 
 | 模型 | 状态 | 引擎 | 上下文 | 并行切分 | 量化 |
 |---|---|---|---|---|---|
-| Qwen3.8-27B-FP8（自选 1） | 已验证（Modal H100/H200） | vLLM 0.34.0 | 272000（YaRN 外推） | 单卡 TP=1 | FP8 权重 + FP8 KV |
-| DeepSeek-V4.1-Flash-1017（必选） | **TBD**：从没上过机 | vLLM 0.34.0（计划） | 272000（计划） | **TBD**：8 卡 TP 方案未定 | **TBD**（官方权重 FP8，待验证） |
-| 第二款模型（自选 2） | **TBD**：未定 | TBD | TBD | TBD | TBD |
+| Qwen3.8-27B-FP8（自选 1） | 已验证（Modal H100/H200） | vLLM 0.34.0 | 272000（YaRN 外推） | 单卡 TP=1（真机测 8 卡多副本/DP） | FP8 权重 + FP8 KV |
+| DeepSeek-V4.1-Flash-1017（必选） | **TBD**：脚本就绪，待真机 | vLLM 0.34.0 | 272000（原生 1M） | **TBD**：8 卡 TP + Engram CPU Offload（对照 DEP8） | 官方 MXFP4/MXFP8 + FP8 KV |
+| GLM-5.3-Flash（自选 2，已定） | **TBD**：脚本就绪，待真机 | vLLM 0.34.0 | 272000（原生 1M） | **TBD**：8 卡 TP（对照 DEP8） | 官方 FP8 + FP8 KV（Blackwell） |
 
 ## 2. 引擎与软件环境（已验证，Qwen 排练环境）
 
@@ -51,10 +51,14 @@
 | 上下文 | 272000（原生 1M 上下文，无需 YaRN） | 待真机验证 |
 | 脚本与镜像 | `download-deepseek.sh`、`serve-deepseek.sh`、`Dockerfile`（CUDA 13.0 devel 草稿） | 已入库，待真机构建与实跑 |
 
-### 3.3 第二款模型（TBD）
+### 3.3 GLM-5.3-Flash（自选 2，已定，脚本骨架已按官方 recipe 就绪，待真机验证）
 
-未定。候选：GLM-5.3-Flash（建议优先，见就绪检查 devlog §3）、GLM-5.3、Kimi K3.1 Pro、MiniMax-H3。
-定下来后按 §3.1 的格式补一行。
+| 项目 | 值 | 状态 |
+|---|---|---|
+| 权重 | `zai-org/GLM-5.3-Flash`（原生 FP8）：约 328 GB（306 GiB）；321B 总参 / 18B 激活 MoE，45 层（34 层 KDA 线性注意力 + 11 层 NoPE 稀疏 MLA），8/288 专家，原生 1M 上下文，内置 1 层 MTP 草稿头 | 2026-11-24 核对自 vLLM 官方 recipe（待真机核实） |
+| 必选参数 | `--enable-auto-tool-choice --tool-call-parser glm47 --reasoning-parser glm47`（不可用 `glm`，否则静默解析失败）；Blackwell 支持 `--kv-cache-dtype fp8`（Hopper 须 BF16 KV） | 已写入 `serve-glm.sh`（待真机验证） |
+| 并行与 SM120 调优 | 默认 8 卡 TP（每卡权重 ~38.3 GiB），对照 DEP8；SM120 不可用 MegaMoE，真机须先跑 `scripts/tune_moe_sm120.sh` 生成 Triton MoE 调优表并通过 `VLLM_TUNED_CONFIG_FOLDER` 加载，并横向对比 `--moe-backend` | **TBD**：待真机验证与选优 |
+| 脚本与报告模板 | `download-glm.sh`、`serve-glm.sh`、`scripts/tune_moe_sm120.sh`、`reports/self-test-report-template.md` | 已入库，待真机实跑 |
 
 ## 4. 量化与缓存/加速策略（Qwen3.8-27B-FP8，已验证）
 

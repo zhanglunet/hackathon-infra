@@ -62,8 +62,10 @@ RUN if [ -n "${PIP_INDEX_URL}" ]; then \
     && python -c "import flashinfer" 2>/dev/null || pip install flashinfer-python
 
 WORKDIR /app
-COPY serve-qwen27b.sh serve-deepseek.sh download-model.sh download-deepseek.sh smoke-test.sh ./
-RUN chmod +x serve-qwen27b.sh serve-deepseek.sh download-model.sh download-deepseek.sh smoke-test.sh
+COPY serve-qwen27b.sh serve-deepseek.sh serve-glm.sh download-model.sh download-deepseek.sh download-glm.sh smoke-test.sh ./
+COPY router/ ./router/
+COPY scripts/ ./scripts/
+RUN chmod +x serve-qwen27b.sh serve-deepseek.sh serve-glm.sh download-model.sh download-deepseek.sh download-glm.sh smoke-test.sh router/prefix_router.py scripts/tune_moe_sm120.sh
 
 EXPOSE 8000
 
