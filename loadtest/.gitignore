@@ -1,0 +1,5 @@
+# 生成的压测数据（全量约 500 MB）和压测结果原始文件不进仓库；
+# 要留档的结果，把 report.md 复制到 reports/ 或写进 devlog。
+data/
+results/
+__pycache__/
