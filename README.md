@@ -13,6 +13,11 @@
 | `serve-qwen27b.sh` | 起 Qwen3.8-27B vLLM OpenAI 服务：272K 上下文、FP8、prefix caching、parser、DP/TP、/metrics，端口 8000 |
 | `download-deepseek.sh` | 下 DeepSeek-V4.1-Flash-1017 权重（约 511 GB / 48 分片）：ModelScope 优先，HF 断点续下 |
 | `serve-deepseek.sh` | 起 DeepSeek-V4.1-Flash-1017 8 卡 vLLM 服务（`deepseek_v41` tokenizer/parser、Engram CPU offload、272K） |
+| `download-glm.sh` | 下 GLM-5.3-Flash 权重（约 328 GB，原生 FP8）：ModelScope 优先，HF 断点续下 |
+| `serve-glm.sh` | 起 GLM-5.3-Flash 8 卡 vLLM 服务（`glm47` parser、FP8 KV、272K、SM120 MoE 调优表支持） |
+| `router/prefix_router.py` | 多副本前缀粘滞路由器（纯标准库，按前缀一致性哈希保缓存命中，聚合 `/metrics`） |
+| `scripts/tune_moe_sm120.sh` | RTX 6000D（SM120）Triton MoE 调优表一键生成脚本（自动补丁 GLM/DeepSeek 架构） |
+| `loadtest/` | 四档 SLO 场景 × 并发阶梯压测框架（AIPerf + 内置引擎、假服务、自动摸高报告） |
 | `Dockerfile` | 标准化推理容器镜像草稿（CUDA 13.0 devel + Python 3.12 + vLLM 0.34.0 + FlashInfer） |
 | `smoke-test.sh` | 冒烟测试：/health、/v1/models、流式出 token 测 TTFT/TPOT、/metrics |
 | `README.md` | 本文件 |
