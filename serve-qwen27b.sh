@@ -91,8 +91,6 @@ KV_CACHE_DTYPE="${KV_CACHE_DTYPE:-fp8}"
 GPU_MEM_UTIL="${GPU_MEM_UTIL:-0.90}"
 MAX_NUM_SEQS="${MAX_NUM_SEQS:-32}"
 TP_SIZE="${TP_SIZE:-1}"
-# 数据并行副本数（单机 8 卡起多副本测 Goodput 用，如 DP_SIZE=8 TP_SIZE=1）；默认不传（1）。
-DP_SIZE="${DP_SIZE:-}"
 # 已验证的调优项（2026-11-23 补，默认值照抄 modal 已验证值，见文件头说明）：
 MAX_NUM_BATCHED_TOKENS="${MAX_NUM_BATCHED_TOKENS:-65536}"
 # 注意用 - 而非 :-：传 ATTENTION_BACKEND="" 时保留空值，不传 --attention-backend、回落 FA3。
@@ -110,16 +108,11 @@ export VLLM_ALLOW_LONG_MAX_MODEL_LEN=1
 # vLLM 对 Qwen3.5 架构默认自动开 breakable cudagraph，会把 compilation
 # mode 置回 NONE（第 4 轮源码定位）；设 0 退出该路径。默认 0。
 export VLLM_USE_BREAKABLE_CUDAGRAPH="${VLLM_USE_BREAKABLE_CUDAGRAPH:-0}"
-# 预热与调优缓存（响应 #1 调研：支持把 FlashInfer/Triton 缓存持久化挂载进容器或目录）
-[ -n "${VLLM_CACHE_ROOT:-}" ] && export VLLM_CACHE_ROOT
-[ -n "${VLLM_TUNED_CONFIG_FOLDER:-}" ] && export VLLM_TUNED_CONFIG_FOLDER
-[ -n "${VLLM_FLASHINFER_AUTOTUNE_CACHE_DIR:-}" ] && export VLLM_FLASHINFER_AUTOTUNE_CACHE_DIR
-[ -n "${VLLM_DEEP_GEMM_WARMUP:-}" ] && export VLLM_DEEP_GEMM_WARMUP
 NATIVE_LEN=262144
 
 echo "== 预检 =="
 if [ ! -f "$MODEL_PATH/config.json" ]; then
-    echo "[错误] 找不到 $MODEL_PATH/config.json，请先运行 bash download-model.sh。"
+    echo "[错误] 找不到 $MODEL_PATH/config.json，请确认 MODEL_DIR 指向 NFS 只读权重根目录（比赛权重已预置，不要自己下载）。"
     exit 1
 fi
 if ! command -v vllm >/dev/null 2>&1; then
@@ -198,10 +191,6 @@ REASONING_ARGS=()
 if [ -n "$REASONING_PARSER" ]; then
     REASONING_ARGS=(--reasoning-parser "$REASONING_PARSER")
 fi
-DP_ARGS=()
-if [ -n "$DP_SIZE" ] && [ "$DP_SIZE" != "1" ]; then
-    DP_ARGS=(--data-parallel-size "$DP_SIZE")
-fi
 
 mkdir -p logs
 LOG_FILE="logs/vllm-serve-$(date +%Y%m%d-%H%M%S).log"
@@ -216,7 +205,6 @@ vllm serve "$MODEL_PATH" \
     --port "$PORT" \
     --served-model-name "$SERVED_NAME" \
     --tensor-parallel-size "$TP_SIZE" \
-    "${DP_ARGS[@]}" \
     --max-model-len "$MAX_MODEL_LEN" \
     "${QUANT_ARGS[@]}" \
     --kv-cache-dtype "$KV_CACHE_DTYPE" \
@@ -229,7 +217,6 @@ vllm serve "$MODEL_PATH" \
     "${TOOL_ARGS[@]}" \
     "${REASONING_ARGS[@]}" \
     --enable-prefix-caching \
-    --enable-prompt-tokens-details \
     --enable-per-request-metrics \
     "${ROPE_ARGS[@]}" \
     2>&1 | tee "$LOG_FILE"

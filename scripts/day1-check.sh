@@ -104,6 +104,14 @@ if [ -d /sys/class/infiniband ] && [ -n "$(ls /sys/class/infiniband 2>/dev/null)
 else
     warn "未见 /sys/class/infiniband 设备（组织方口径 12x400G RoCE 只用 8 个；若无 RDMA，跨机走 TCP）"
 fi
+echo "ACTIVE 的 RoCE 口（12 个里只有 8 个可用，跨机 PD/CP 前须把这 8 个写进 NCCL_IB_HCA）："
+if command -v rdma >/dev/null 2>&1; then
+    rdma link show 2>/dev/null | grep -i "state ACTIVE" || echo "（rdma link 未见 ACTIVE 口）"
+elif command -v ibv_devinfo >/dev/null 2>&1; then
+    ibv_devinfo 2>/dev/null | grep -E "hca_id|port:|state:" | head -40
+else
+    echo "（无 rdma / ibv_devinfo 工具，现场用 ibv_devinfo 或 rdma link 手工筛 8 个 ACTIVE 口）"
+fi
 ip -br link 2>/dev/null | awk '{print $1, $2}' | head -20
 
 echo "--- 8. 权重（NFS 只读共享存储，自动搜） ---"
