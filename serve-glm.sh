@@ -47,7 +47,8 @@ set -euo pipefail
 
 MODEL_DIR="${MODEL_DIR:-./models}"
 MODEL_NAME="${MODEL_NAME:-GLM-5.3-Flash}"
-MODEL_PATH="$MODEL_DIR/$MODEL_NAME"
+# NFS 上的目录名不一定和 MODEL_NAME 一致（可能多一层组织名），允许直接传 MODEL_PATH（issue #14 ①-1）
+MODEL_PATH="${MODEL_PATH:-$MODEL_DIR/$MODEL_NAME}"
 HOST="${HOST:-0.0.0.0}"
 PORT="${PORT:-8000}"
 SERVED_NAME="${SERVED_NAME:-glm-5.3-flash}"
@@ -78,7 +79,7 @@ fi
 
 echo "== GLM-5.3-Flash 预检 =="
 if [ ! -f "$MODEL_PATH/config.json" ]; then
-    echo "[错误] 找不到 $MODEL_PATH/config.json，请先运行 bash download-glm.sh。"
+    echo "[错误] 找不到 $MODEL_PATH/config.json，请确认 MODEL_DIR / MODEL_PATH 是否指向 NFS 上的权重目录（比赛权重已预置，不要自己下载）。"
     exit 1
 fi
 if ! command -v vllm >/dev/null 2>&1; then
@@ -124,8 +125,10 @@ if [ -n "$MTP_TOKENS" ]; then
     EXTRA_ARGS+=(--speculative-config "{\"method\":\"mtp\",\"num_speculative_tokens\":${MTP_TOKENS}}")
 fi
 
-mkdir -p logs
-LOG_FILE="logs/vllm-glm-$(date +%Y%m%d-%H%M%S).log"
+# 日志目录可配置：容器里代码目录只读时，默认 ./logs 写不进去会直接退出（issue #14 ①-2）
+LOG_DIR="${LOG_DIR:-./logs}"
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/vllm-glm-$(date +%Y%m%d-%H%M%S).log"
 echo "== 启动 GLM-5.3-Flash（日志写到 $LOG_FILE）=="
 echo "模型：$MODEL_PATH | 上下文：$MAX_MODEL_LEN | KV：$KV_CACHE_DTYPE | MAX_NUM_SEQS：$MAX_NUM_SEQS"
 echo "服务地址：http://<本机 IP>:$PORT/v1/chat/completions"

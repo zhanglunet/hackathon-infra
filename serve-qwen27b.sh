@@ -82,7 +82,8 @@ set -euo pipefail
 
 MODEL_DIR="${MODEL_DIR:-./models}"
 MODEL_NAME="${MODEL_NAME:-Qwen3.8-27B-FP8}"
-MODEL_PATH="$MODEL_DIR/$MODEL_NAME"
+# NFS 上的目录名不一定和 MODEL_NAME 一致（可能多一层组织名），允许直接传 MODEL_PATH（issue #14 ①-1）
+MODEL_PATH="${MODEL_PATH:-$MODEL_DIR/$MODEL_NAME}"
 HOST="${HOST:-0.0.0.0}"
 PORT="${PORT:-8000}"
 SERVED_NAME="${SERVED_NAME:-qwen3.8-27b}"
@@ -112,7 +113,7 @@ NATIVE_LEN=262144
 
 echo "== 预检 =="
 if [ ! -f "$MODEL_PATH/config.json" ]; then
-    echo "[错误] 找不到 $MODEL_PATH/config.json，请确认 MODEL_DIR 指向 NFS 只读权重根目录（比赛权重已预置，不要自己下载）。"
+    echo "[错误] 找不到 $MODEL_PATH/config.json，请确认 MODEL_DIR / MODEL_PATH 是否指向 NFS 上的权重目录（比赛权重已预置，不要自己下载）。"
     exit 1
 fi
 if ! command -v vllm >/dev/null 2>&1; then
@@ -192,8 +193,10 @@ if [ -n "$REASONING_PARSER" ]; then
     REASONING_ARGS=(--reasoning-parser "$REASONING_PARSER")
 fi
 
-mkdir -p logs
-LOG_FILE="logs/vllm-serve-$(date +%Y%m%d-%H%M%S).log"
+# 日志目录可配置：容器里代码目录只读时，默认 ./logs 写不进去会直接退出（issue #14 ①-2）
+LOG_DIR="${LOG_DIR:-./logs}"
+mkdir -p "$LOG_DIR"
+LOG_FILE="$LOG_DIR/vllm-serve-$(date +%Y%m%d-%H%M%S).log"
 echo "== 启动 vLLM（日志同时写到 $LOG_FILE）=="
 echo "服务地址：http://<本机 IP>:$PORT/v1/chat/completions"
 echo "指标地址：http://<本机 IP>:$PORT/metrics"
