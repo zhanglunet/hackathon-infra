@@ -49,9 +49,14 @@ except Exception as e:
     print(f"[提示] 未能导入 torch：{e}")
 PYEOF
 
-echo "== 2/4 拉取 vLLM ${VLLM_TAG} benchmarks/kernels/benchmark_moe.py =="
+echo "== 2/4 准备 benchmark_moe.py（优先用仓库内已打补丁的副本，离线可用）=="
 mkdir -p "$WORK_DIR" "$SAVE_DIR"
-if [ ! -f "$BENCH_PY" ]; then
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+BUNDLED="$SCRIPT_DIR/moe_tuner/benchmark_moe.py"
+if [ -f "$BUNDLED" ]; then
+    echo "用仓库 bundled 副本：$BUNDLED（已打 Glm5Next/DeepseekV41 补丁）"
+    cp "$BUNDLED" "$BENCH_PY"
+elif [ ! -f "$BENCH_PY" ]; then
     RAW_URL="https://raw.githubusercontent.com/vllm-project/vllm/${VLLM_TAG}/benchmarks/kernels/benchmark_moe.py"
     echo "下载：$RAW_URL"
     curl -fsSL "$RAW_URL" -o "$BENCH_PY"
