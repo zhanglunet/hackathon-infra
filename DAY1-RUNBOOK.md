@@ -46,7 +46,7 @@
 | SGLang 镜像构建 | `sglang-patches/Dockerfile` | v0.5.23-cu130 + 修复 1–6，见 §1.5 |
 | vLLM 镜像构建 | `Dockerfile`（仓库根目录） | vLLM 0.34.0 + nvcc + FlashInfer，见 §1.5 |
 | vLLM 启动脚本 | `serve-deepseek.sh`、`serve-glm.sh`、`serve-qwen27b.sh` | 均未在真机验证过；都认 `MODEL_DIR` 环境变量 |
-| 前缀路由器 | `router/prefix_router.py` | 纯标准库，本地实测命中率 agent 0.65 / coding 0.87 |
+| 前缀路由器 | `router/prefix_router.py` | 纯标准库，经路由器实测命中率 agent 0.63 / coding 0.85（ε 默认 1.0；直连基线 0.65 / 0.87） |
 | 压测框架 | `loadtest/` | 四档场景已按规则写好；只在假服务上自测过 |
 | 本 runbook | `DAY1-RUNBOOK.md` | 本文件 |
 

@@ -5,19 +5,19 @@
   "runs": [
     {
       "tag": "cold",
-      "ttft_s": 53.64,
-      "tpot_ms": 15.5,
-      "tokens": 59,
-      "total_s": 54.54,
-      "answer_head": "The user is asking me to write a response to their request, but I'm an AI assistant and cannot respond to that specific request. I need to focus on the current task at hand, which is to provide a resp"
+      "ttft_s": 41.09,
+      "tpot_ms": 12.1,
+      "tokens": 25,
+      "total_s": 41.38,
+      "answer_head": "The user's last two messages are about a long-term relationship and a ship's collection of the \"bif\" and the \"waste\" of the \""
     },
     {
       "tag": "hot",
-      "ttft_s": 2.37,
-      "tpot_ms": 21.5,
-      "tokens": 8,
-      "total_s": 2.52,
-      "answer_head": "The user has a \"launch\" that's been on a l"
+      "ttft_s": 2.14,
+      "tpot_ms": 12.4,
+      "tokens": 57,
+      "total_s": 2.84,
+      "answer_head": "The user is asking me to respond to a salient whoifam-2-raw-stand, and the question is about the t...\n\nThe user is asking me to explain the differences between the two breathers of the Hopper's total,"
     }
   ]
 }

@@ -15,7 +15,7 @@
     取分最高的。不再是哈希取模：增删一个后端时，只有原来落在它的那部分会话
     需要迁移，其余会话不动（旧的「一致性哈希」注释说错了，实际是取模，已改）。
   - 有界负载（bounded loads）：分最高的后端在途请求数超过 平均值 × (1 + ε)
-    （ε 默认 0.25）时，顺着分数往下找下一个后端。共同前缀导致热点时自动溢出，
+    （ε 默认 1.0）时，顺着分数往下找下一个后端。共同前缀导致热点时自动溢出，
     不会让 1 个副本干 100% 的活。
   - 后台探活：每 --health-interval 秒（默认 5 秒）并行探各后端的 /health，
     不健康的后端摘出路由环，恢复后加回；/health 端点直接返回缓存的探活结果，
@@ -151,7 +151,7 @@ def _fetch_backend(
 class RouterState:
     """路由器的共享状态：健康缓存、在途计数、统计。"""
 
-    def __init__(self, backends: List[Backend], health_interval: float = 5.0, epsilon: float = 0.25):
+    def __init__(self, backends: List[Backend], health_interval: float = 5.0, epsilon: float = 1.0):
         self.backends = list(backends)
         self.health_interval = health_interval
         self.epsilon = epsilon
@@ -446,7 +446,7 @@ def main() -> None:
     parser.add_argument("--prefix-chars", type=int, default=512, help="用于路由键的对话字符数（默认 512，开头的 system 消息不计入）")
     parser.add_argument("--timeout", type=float, default=21600.0, help="上游请求超时秒数（默认 21600，与 AIPerf 默认一致）")
     parser.add_argument("--health-interval", type=float, default=5.0, help="后台探活间隔秒数（默认 5）")
-    parser.add_argument("--epsilon", type=float, default=0.25, help="有界负载系数 ε：后端在途数超过 平均值×(1+ε) 时溢出（默认 0.25）")
+    parser.add_argument("--epsilon", type=float, default=1.0, help="有界负载系数 ε：后端在途数超过 平均值×(1+ε) 时溢出（默认 1.0）")
     args = parser.parse_args()
 
     backends = parse_backends(args.backends)
