@@ -158,8 +158,10 @@ def main():
             # 每次运行给所有请求（含预热）开头加同一个随机标记：本轮内的共享前缀照样命中，
             # 但同一份数据重跑时不会白捡上一轮留在缓存里的内容（否则命中率和 TTFT 都会虚高）。
             salt = f"[run {uuid.uuid4().hex[:12]}]\n"
-            records = [dict(r, text=salt + r["text"]) for r in records]
-            warm = [dict(w, text=salt + w["text"]) for w in warm]
+            # 有共同 system prompt 时标记加在 system 最前面（它才是整个请求的开头）
+            salted = lambda r: dict(r, system=salt + r["system"]) if r.get("system") else dict(r, text=salt + r["text"])  # noqa: E731
+            records = [salted(r) for r in records]
+            warm = [salted(w) for w in warm]
             print(f"\n== {sc['title']}（{name}）并发 {conc}：{len(records)} 个请求 ==", flush=True)
             w_s, w_err = warmup(urls, model, warm, conc, a.timeout)
             if warm:

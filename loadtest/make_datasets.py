@@ -11,6 +11,13 @@
     所以理论命中率 ≈ 设定值；实际命中率由压测时 /metrics 的增量算出，两者对照着看。
   - 不同并发级别用不同的会话，上一级留在缓存里的内容不会帮下一级作弊。
 
+共同 system prompt（--shared-system-tokens N，默认 0 = 不加）：
+  真实智能体/编程请求开头往往是一段所有会话都一样的长 system prompt（工具说明、规范）。
+  加上它才能测到多副本路由器的关键路径：旧版 router 正是被这种请求打成 100%/0%/0%/0%
+  （issue #14）。--shared-system-role system 放成单独的 system 消息（默认）；
+  user 放在 user 消息开头（模拟数据集把共同前缀写进 user 消息的情况）。
+  注意：这段内容本身也会命中缓存，所以加了之后理论命中率会高于场景目标值（meta 里有数）。
+
 文本来源：本机 Python 标准库的源码和注释（自然的代码 + 英文），不是随机乱码。
 规则明确禁止长文本档用乱码测速度（乱码会让投机解码的接受率失真）。
 
@@ -139,7 +146,7 @@ LONGGEN_ASKS = [
 ]
 
 
-def build_level(tok, rng, name, sc, conc, rounds, min_requests, scale):
+def build_level(tok, rng, name, sc, conc, rounds, min_requests, scale, shared_sys="", sys_role="system"):
     """生成某场景某级并发的 (正式请求, 预热请求, 统计)。"""
     n_req = max(min_requests, rounds * conc)
     n_sess = conc if sc["cache_hit"] > 0 else n_req
@@ -166,8 +173,7 @@ def build_level(tok, rng, name, sc, conc, rounds, min_requests, scale):
         header = f"### Session {sid}: repository snapshot and prior context\n"
         shared_text = header + take(tok, rng, shared_max) if shared_max > 0 else ""
         if shared_text:
-            warm.append({"session_id": sid, "text": shared_text, "output_tokens": 1,
-                         "input_tokens": tok.count(shared_text)})
+            warm.append({"session_id": sid, "text": shared_text, "output_tokens": 1})
         for j, L in enumerate(sl):
             shared_n = int(L * hit)
             if shared_n > 0:
@@ -187,6 +193,20 @@ def build_level(tok, rng, name, sc, conc, rounds, min_requests, scale):
             reqs.append({"session_id": sid, "text": text, "output_tokens": out_tokens,
                          "shared_chars": len(cut)})
 
+    # 共同 system prompt：system 角色单独成一条消息；user 角色拼到 user 消息最前面
+    sys_tokens = tok.count(shared_sys) if shared_sys else 0
+    for r in reqs + warm:
+        if not shared_sys:
+            break
+        if sys_role == "system":
+            r["system"] = shared_sys
+        else:
+            r["text"] = shared_sys + "\n" + r["text"]
+            if "shared_chars" in r:
+                r["shared_chars"] += len(shared_sys) + 1
+    for w in warm:
+        w["input_tokens"] = tok.count(w["text"]) + (sys_tokens if "system" in w else 0)
+
     # 重排成会话轮转顺序
     by_sess = {}
     for r in reqs:
@@ -197,10 +217,13 @@ def build_level(tok, rng, name, sc, conc, rounds, min_requests, scale):
             if j < len(v):
                 ordered.append(v[j])
 
-    in_counts = [tok.count(r["text"]) for r in ordered]
+    text_counts = [tok.count(r["text"]) for r in ordered]
+    extra_sys = sys_tokens if (shared_sys and sys_role == "system") else 0
+    in_counts = [c + extra_sys for c in text_counts]
     for r, c in zip(ordered, in_counts):
         r["input_tokens"] = c
-    shared_tokens = sum(int(c * r["shared_chars"] / max(1, len(r["text"]))) for r, c in zip(ordered, in_counts))
+    shared_tokens = sum(int(c * r["shared_chars"] / max(1, len(r["text"]))) + extra_sys
+                        for r, c in zip(ordered, text_counts))
     stats = {
         "scenario": name, "concurrency": conc, "requests": len(ordered), "sessions": len(by_sess),
         "warmup_requests": len(warm),
@@ -209,6 +232,8 @@ def build_level(tok, rng, name, sc, conc, rounds, min_requests, scale):
         "output_tokens": out_tokens,
         "target_cache_hit": hit,
         "theoretical_cache_hit": round(shared_tokens / max(1, sum(in_counts)), 3),
+        "shared_system_tokens": sys_tokens,
+        "shared_system_role": sys_role if shared_sys else None,
     }
     return ordered, warm, stats
 
@@ -224,6 +249,10 @@ def main():
     p.add_argument("--tokenizer", default="", help="模型目录或 tokenizer.json；不给则按字符估算")
     p.add_argument("--chars-per-token", type=float, default=3.6, help="估算模式下每 token 字符数")
     p.add_argument("--seed", type=int, default=20261127)
+    p.add_argument("--shared-system-tokens", type=int, default=0,
+                   help="所有请求开头加同一段共同 system prompt 的 token 数（按 --scale 缩放；0 = 不加）")
+    p.add_argument("--shared-system-role", choices=["system", "user"], default="system",
+                   help="共同前缀放成单独的 system 消息（默认），还是拼在 user 消息开头")
     a = p.parse_args()
 
     rng = random.Random(a.seed)
@@ -241,6 +270,14 @@ def main():
         tok = CharTok(corpus, a.chars_per_token)
     print(f"语料约 {tok.n:,} token", flush=True)
 
+    shared_sys = ""
+    if a.shared_system_tokens > 0:
+        n_sys = max(16, int(a.shared_system_tokens * a.scale))
+        # 单独的随机源：加不加这个选项，其余数据都不变
+        shared_sys = "### Shared agent instructions (identical for every session)\n" + \
+            take(tok, random.Random(a.seed + 1), n_sys)
+        print(f"共同 system prompt：约 {tok.count(shared_sys):,} token，放在 {a.shared_system_role} 消息", flush=True)
+
     only = {int(x) for x in a.concurrency.split(",") if x.strip()}
     all_stats = []
     for name in names:
@@ -250,11 +287,12 @@ def main():
         for conc in sc["concurrency"]:
             if only and conc not in only:
                 continue
-            reqs, warm, st = build_level(tok, rng, name, sc, conc, a.rounds, a.min_requests, a.scale)
+            reqs, warm, st = build_level(tok, rng, name, sc, conc, a.rounds, a.min_requests, a.scale,
+                                         shared_sys, a.shared_system_role)
             with open(os.path.join(d, f"c{conc}.jsonl"), "w") as f:
                 for r in reqs:
-                    f.write(json.dumps({k: r[k] for k in ("session_id", "text", "input_tokens", "output_tokens")},
-                                       ensure_ascii=False) + "\n")
+                    f.write(json.dumps({k: r[k] for k in ("session_id", "system", "text", "input_tokens", "output_tokens")
+                                        if k in r}, ensure_ascii=False) + "\n")
             with open(os.path.join(d, f"c{conc}.warmup.jsonl"), "w") as f:
                 for r in warm:
                     f.write(json.dumps(r, ensure_ascii=False) + "\n")
@@ -263,7 +301,9 @@ def main():
             print(f"  {name:8s} c{conc:<3d} 请求 {st['requests']:4d}  会话 {st['sessions']:4d}  "
                   f"输入均值 {st['input_tokens_mean']:>7,}  最大 {st['input_tokens_max']:>7,}  "
                   f"输出 {st['output_tokens']:>5,}  理论命中 {st['theoretical_cache_hit']:.2f}", flush=True)
-    meta = {"seed": a.seed, "scale": a.scale, "tokenizer": a.tokenizer or None, "levels": all_stats}
+    meta = {"seed": a.seed, "scale": a.scale, "tokenizer": a.tokenizer or None,
+            "shared_system_tokens": a.shared_system_tokens, "shared_system_role": a.shared_system_role,
+            "levels": all_stats}
     with open(os.path.join(a.out, "meta.json"), "w") as f:
         json.dump(meta, f, ensure_ascii=False, indent=2)
     print(f"完成：{a.out}/meta.json", flush=True)

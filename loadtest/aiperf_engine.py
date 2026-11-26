@@ -29,6 +29,17 @@ def run(aiperf, url, model, tokenizer, records, conc, sc, extra, art_dir, timeou
     with open(inp, "w") as f:
         for r in records:
             f.write(json.dumps({"text": r["text"], "output_length": r["output_tokens"]}, ensure_ascii=False) + "\n")
+    sys_prompts = {r.get("system") for r in records}
+    sys_args = []
+    if sys_prompts != {None}:
+        # 共同 system prompt 走 AIPerf 的 --system-prompt-file（0.14.0 会把它作为 system 消息
+        # 加到每个请求开头），要求整级所有请求的 system 完全相同
+        if len(sys_prompts) != 1:
+            raise ValueError("aiperf 引擎要求同一级所有请求的 system prompt 相同")
+        sys_p = os.path.join(art_dir, "system_prompt.txt")
+        with open(sys_p, "w") as f:
+            f.write(sys_prompts.pop())
+        sys_args = ["--system-prompt-file", sys_p]
     cmd = [
         aiperf, "profile",
         "-m", model,
@@ -45,7 +56,7 @@ def run(aiperf, url, model, tokenizer, records, conc, sc, extra, art_dir, timeou
         "--request-timeout-seconds", str(timeout),
         "--goodput", f"time_to_first_token:{sc['ttft_s'] * 1000:g} inter_token_latency:{sc['tpot_ms']:g}",
         "--artifact-dir", art_dir,
-    ]
+    ] + sys_args
     for k, v in extra.items():
         cmd += ["--extra-inputs", f"{k}:{str(v).lower() if isinstance(v, bool) else v}"]
     log = os.path.join(art_dir, "aiperf_stdout.log")

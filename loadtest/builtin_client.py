@@ -18,7 +18,8 @@ from common import now, percentile
 def one_request(url, model, rec, extra, timeout):
     body = {
         "model": model,
-        "messages": [{"role": "user", "content": rec["text"]}],
+        "messages": ([{"role": "system", "content": rec["system"]}] if rec.get("system") else [])
+        + [{"role": "user", "content": rec["text"]}],
         "max_tokens": rec["output_tokens"],
         "stream": True,
         "stream_options": {"include_usage": True},

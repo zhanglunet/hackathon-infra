@@ -42,6 +42,7 @@
 | `builtin_client.py` | 内置客户端（只用标准库）：AIPerf 装不上时的备胎，也用来和 AIPerf 互相核对 |
 | `report.py` | 结果目录 → `report.md`；给多个目录时并排对比摸高 |
 | `mock_server.py` | 假推理服务：没有 GPU 时调通整条链路（只用标准库） |
+| `router_check.py` | 路由器对照：同一份数据「直连各副本」和「经 prefix_router」各跑一遍，并排比命中率、P90、负载占比 |
 | `selftest.sh` | 一键自检：假服务 + 缩小版数据 + 每档并发 8，1～2 分钟，$0 |
 | `common.py` | 共用工具：`/metrics` 解析、分位数、SLO 判定 |
 
@@ -59,6 +60,14 @@
   规则明确禁止长文本档用乱码测速度，因为乱码会让投机解码的接受率失真。
 - **输出长度**：默认带 `ignore_eos: true`，让每个请求都输出到设定长度（1K / 2K / 8K）。
 - 不同并发级别用不同的会话，上一级留在缓存里的内容帮不了下一级。
+- **共同 system prompt（可选，`--shared-system-tokens N`）**：所有请求开头加同一段 N token 的内容
+  （按 `--scale` 缩放）。真实智能体请求开头常有一段所有会话都一样的工具说明。测多副本路由器必须开它：
+  旧版 router 就是被这种请求打成 100%/0%/0%/0% 的（issue #14），不开的话压测根本走不到这条路径。
+  `--shared-system-role system`（默认）放成单独的 system 消息；`user` 拼在 user 消息开头，
+  模拟数据集把共同前缀写进 user 消息的情况。两个引擎都支持（AIPerf 走它的 `--system-prompt-file`，已用抓包核实
+  每个请求都带上了 system 消息）。**注意**：这段内容本身也会命中缓存、也算进输入长度，所以开了之后
+  输入均值和理论命中率都会比场景目标高（`meta.json` 里有数）。它只用来测路由，**成绩数据不要开**，
+  也不要和不开的结果混着比。
 
 和官方数据的差别（**未核实**，等评测包）：官方智能体档是「多轮编程轨迹」，命中来自多轮对话复用历史；
 我们用「共享前缀 + 预热」近似。官方长文本档是 SPEED-Bench 固化 60 条。评测包下发后，
@@ -106,6 +115,31 @@ python3 loadtest/run_ladder.py --url http://127.0.0.1:8000 --data loadtest/data 
 
 跑完看 `loadtest/results/qwen-tp1/report.md`：最上面是每档的摸高并发和 Goodput，下面是每一级的明细。
 
+### 2.5 多副本：先验证路由器没把缓存命中弄丢
+
+```bash
+# 数据要带共同 system prompt，否则测不到路由器的关键路径
+python3 loadtest/make_datasets.py --out loadtest/data-sys --scenarios agent,coding --concurrency 32 \
+    --shared-system-tokens 20000 --tokenizer /models/Qwen3.8-27B-FP8
+# 副本和路由器都已起好
+python3 loadtest/router_check.py --backends http://127.0.0.1:8001,http://127.0.0.1:8002,...,http://127.0.0.1:8008 \
+    --router http://127.0.0.1:8000 --data loadtest/data-sys --out loadtest/results/router-check
+```
+
+不给 `--router` 时脚本自己起一个 `prefix_router.py`，`--router-args "--epsilon 1"` 透传参数，方便试不同设置。
+看 `router_check.md`：经路由器的实测命中率要和直连差不超过 0.03，各副本请求占比接近均分。
+本地没 GPU 时 `python3 loadtest/router_check.py --mock 4 --out /tmp/rc` 起 4 个假服务自测（约 1 分钟）。
+
+本地 4 个假服务的实测（2026-11-26，scale 0.02，并发 32，命中率为 直连 → 经路由）：
+
+| 设置 | agent | coding | 说明 |
+|---|---|---|---|
+| 旧版 router（709718a） | 0.75 → 0.67 | 0.89 → 0.81 | 且经路由那一路有 13 / 9 个请求出错 |
+| 当前 router，默认 `--epsilon 0.25` | 0.75 → 0.66 | 0.89 → 0.77 | 负载均衡了，但会话被挤到别的副本 |
+| 当前 router，`--epsilon 1` | 0.75 → 0.75 | 0.89 → 0.89 | ✅ |
+| 共同前缀在 user 消息里，默认参数 | 0.75 → 0.49 | 0.89 → 0.52 | 路由键全相同，粘滞全丢 |
+| 同上，`--epsilon 1 --prefix-chars 2048` | 0.75 → 0.75 | 0.89 → 0.87 | ✅；`--prefix-chars` 要比共同前缀的**字符数**长（全量 2 万 token ≈ 7 万字符） |
+
 ### 3. 对比几种部署方案
 
 ```bash
@@ -123,6 +157,7 @@ python3 loadtest/report.py loadtest/results/qwen-tp1 loadtest/results/qwen-dp8 l
 | **某档在某级不过线，想看再往上会怎样** | 加 `--no-stop-on-fail`（默认不过线就停，省时间） |
 | **想看冷缓存下的表现** | 加 `--no-warmup` |
 | **多个副本、前面没有负载均衡** | `--url http://h1:8000,http://h2:8000 --engine builtin`：同一会话固定发到同一个地址，保住缓存命中。**注意**：真要交件时，评审组只连一个地址，前面的负载均衡也必须按会话/前缀粘滞，否则命中率会掉 |
+| **多副本 + prefix_router，想确认路由没坏命中** | 数据加 `--shared-system-tokens 20000`，跑 `router_check.py`（见上面 2.5）。命中率经路由器掉了：先试 `--router-args "--epsilon 1"`；官方数据的共同前缀若写在 user 消息里，把 `--prefix-chars` 调到比它长 |
 | **AIPerf 和内置客户端的数对不上** | 用同一份数据各跑一次同一级，对比 P90 TTFT / TPOT；差得多先查 tokenizer 和 `ignore_eos` 是否生效 |
 | **官方评测包到了** | 见上一节「和官方数据的差别」：换数据、按官方 SLO 改 `scenarios.py`，以官方脚本结果为准 |
 
