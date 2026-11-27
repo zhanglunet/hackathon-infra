@@ -48,6 +48,7 @@
 | vLLM 启动脚本 | `serve-deepseek.sh`、`serve-glm.sh`、`serve-qwen27b.sh` | 均未在真机验证过；都认 `MODEL_DIR` 环境变量 |
 | 前缀路由器 | `router/prefix_router.py` | 纯标准库，经路由器实测命中率 agent 0.63 / coding 0.85（ε 默认 1.0；直连基线 0.65 / 0.87） |
 | 压测框架 | `loadtest/` | 四档场景已按规则写好；只在假服务上自测过 |
+| 夜跑队列 | `nightq/` | 夜里自动换配置跑压测，早上看 `summary.md`；只在假服务上自测过，用法见 `nightq/README.md` |
 | 本 runbook | `DAY1-RUNBOOK.md` | 本文件 |
 
 ## 1.5 赛前预打包双镜像（11/25–28，现在就能做）
@@ -242,6 +243,10 @@
    - SGLang 线 Node 3-4：挂跑 SGLang 线 DeepSeek 完整四档阶梯
      （8/16/32/64）+ 稳定性 Soak 压测，同步跑 190 题全量精度，
      验证 bounded replay 安全余量。
+
+   要连着对比几组配置的，用夜跑队列挂（`nightq/README.md`）：
+   `nohup python3 nightq/nightq.py <队列.ini> --out nightq/runs/<日期-节点> --stop-after 08:30 &`，
+   挂之前先 `--dry-run`；第一晚之前白天先用一个短任务试一遍（它还没在真机上跑过）。
 2. 挂之前确认：任务是后台跑、日志有人看、GPU 不是空闲状态
    （空闲 8 小时规则只算工作日，夜间跑任务正好避开）。
 3. 当日 devlog 当晚写完（验收结果、三个模型的冒烟结论、

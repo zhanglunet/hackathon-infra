@@ -18,6 +18,7 @@
 | `router/prefix_router.py` | 多副本前缀粘滞路由器（纯标准库，按前缀一致性哈希保缓存命中，聚合 `/metrics`） |
 | `scripts/tune_moe_sm120.sh` | RTX 6000D（SM120）Triton MoE 调优表一键生成脚本（自动补丁 GLM/DeepSeek 架构） |
 | `loadtest/` | 四档 SLO 场景 × 并发阶梯压测框架（AIPerf + 内置引擎、假服务、自动摸高报告） |
+| `nightq/` | 夜跑队列：按清单逐个配置起服务、等就绪、跑步骤、停服务，失败就换下一个，早上看 `summary.md` |
 | `Dockerfile` | 标准化推理容器镜像草稿（CUDA 13.0 devel + Python 3.12 + vLLM 0.34.0 + FlashInfer） |
 | `smoke-test.sh` | 冒烟测试：/health、/v1/models、流式出 token 测 TTFT/TPOT、/metrics |
 | `README.md` | 本文件 |
