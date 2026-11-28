@@ -32,32 +32,37 @@ while [ $# -gt 0 ]; do
 done
 
 [ -n "$NODES" ] || { echo "[错误] 没给节点：传 --nodes 或设 R2_NODES（4 台比赛机地址，逗号分隔）。" >&2; exit 2; }
-command -v docker >/dev/null 2>&1 || { echo "[错误] 本机找不到 docker。" >&2; exit 2; }
-command -v zstd >/dev/null 2>&1 || { echo "[错误] 本机找不到 zstd（apt install zstd）。" >&2; exit 2; }
 
 SAFE_TAG="$(echo "$IMAGE" | tr '/:' '__')"
 PKG="$PKG_DIR/$SAFE_TAG.tar.zst"
-mkdir -p "$PKG_DIR"
 
 echo "== 打包 $IMAGE → $PKG =="
 if [ "$DRY_RUN" = "1" ]; then
-    echo "[dry-run] docker save \"$IMAGE\" | zstd -T0 -19 -o \"$PKG\""
+    printf '[dry-run] docker save %q | zstd -T0 -19 -o %q\n' "$IMAGE" "$PKG"
 else
+    command -v docker >/dev/null 2>&1 || { echo "[错误] 本机找不到 docker。" >&2; exit 2; }
+    command -v zstd >/dev/null 2>&1 || { echo "[错误] 本机找不到 zstd（apt install zstd）。" >&2; exit 2; }
+    mkdir -p "$PKG_DIR"
     docker save "$IMAGE" | zstd -T0 -19 -o "$PKG"
+    PKG_SIZE="$(du -h "$PKG" | cut -f1)"
+    PKG_BYTES="$(stat -c%s "$PKG")"
+    echo "镜像包：$PKG（$PKG_SIZE，$PKG_BYTES 字节）——交卷时把这个数填进环境与优化说明表"
 fi
-PKG_SIZE="$(du -h "$PKG" | cut -f1)"
-PKG_BYTES="$(stat -c%s "$PKG")"
-echo "镜像包：$PKG（$PKG_SIZE，$PKG_BYTES 字节）——交卷时把这个数填进环境与优化说明表"
 
 IFS=',' read -ra NODE_LIST <<< "$NODES"
+LOAD_CMD="zstd -dc /tmp/$(basename "$PKG") | docker load && docker images '$IMAGE'"
 for node in "${NODE_LIST[@]}"; do
     echo "== 分发 → $node =="
     if [ "$DRY_RUN" = "1" ]; then
-        echo "[dry-run] scp $PKG $node:/tmp/ && ssh $node 'zstd -dc /tmp/$(basename "$PKG") | docker load && docker images $IMAGE'"
+        printf '[dry-run] scp %q %q && ssh %q %q\n' "$PKG" "$node:/tmp/" "$node" "$LOAD_CMD"
         continue
     fi
     scp "$PKG" "$node:/tmp/"
-    ssh "$node" "zstd -dc /tmp/$(basename "$PKG") | docker load && docker images '$IMAGE'"
+    ssh "$node" "$LOAD_CMD"
 done
 
-echo "== 完成：$IMAGE 已分发到 ${#NODE_LIST[@]} 台机，包 $PKG（$PKG_SIZE）=="
+if [ "$DRY_RUN" = "1" ]; then
+    echo "== 预演完成：$IMAGE，${#NODE_LIST[@]} 台机 =="
+else
+    echo "== 完成：$IMAGE 已分发到 ${#NODE_LIST[@]} 台机，包 $PKG（$PKG_SIZE）=="
+fi
